@@ -90,7 +90,7 @@ JalaliDate.jalaliToGregorian = function (j_y, j_m, j_d) {
   gd = gd < 10 ? "0" + gd : gd;
   return [gy, gm, gd];
 };
-const dataStorageKey = 'motorcycleManagementData';
+const dataStorageKey = `motorcycleManagementData_${defaultConfig.company_name}`;
 const usersStorageKey = 'userAccountsData';
 function generateId() {
   return Date.now().toString() + Math.random().toString(36).substr(2, 9);
@@ -509,7 +509,7 @@ async function loadAndSyncDataForPage(page) {
       case 'usage-amount':
         await syncMotorcyclesWithGoogleSheets(allData);
         await syncRequestsWithGoogleSheets(allData);
-        await loadFuelReports(); 
+        await loadFuelReports();
         break;
       case 'employees':
         await syncEmployeesWithGoogleSheets(allData);
@@ -519,10 +519,10 @@ async function loadAndSyncDataForPage(page) {
         await syncUsersWithGoogleSheets();
         break;
       case 'fuel-expenses':
-        renderMotorcyclesForFuel(); 
+        renderMotorcyclesForFuel();
         syncMotorcyclesWithGoogleSheets(allData).then(() => {
           console.log('After background sync in fuel-expenses: allData length =', allData.length, 'motorcycles =', allData.filter(d => d.type === 'motorcycle').length);
-          renderMotorcyclesForFuel(); 
+          renderMotorcyclesForFuel();
         });
         await loadFuelReports();
         console.log('fuelReports length =', fuelReports.length);
@@ -567,7 +567,7 @@ function updateCurrentPage() {
       updateDashboard();
       break;
     case 'usage-amount':
-      renderUsageMotorcycles(); 
+      renderUsageMotorcycles();
       break;
   }
 }
@@ -1557,10 +1557,10 @@ function selectEmployee(employeeId, employeeText) {
 
   if (employee && employee.assignedMotorcycleId) {
     const assignedMoto = allData.find(d => d.__backendId === employee.assignedMotorcycleId && d.type === 'motorcycle');
-        if (assignedMoto) {
+    if (assignedMoto) {
       // چک درخواست‌های فعال
-      const activeRequests = allData.filter(d => 
-        d.type === 'request' && 
+      const activeRequests = allData.filter(d =>
+        d.type === 'request' &&
         (d.status === 'pending' || d.status === 'active') &&
         d.motorcycleId === assignedMoto.__backendId
       );
@@ -1584,7 +1584,7 @@ function selectEmployee(employeeId, employeeText) {
     } else {
       showToast('موتور اختصاصی این کارمند یافت نشد', '⚠️');
     }
-  } 
+  }
 
   // اگر نرسید به اتوماتیک → انتخاب دستی
   motorcycleDisplay.textContent = 'موتور سکیل را انتخاب کنید';
@@ -1753,7 +1753,7 @@ function openEditEmployeeModal(employeeId) {
   document.getElementById('edit-employee-fingerprint').value = employee.fingerprintId;
   document.getElementById('edit-employee-form').dataset.id = employeeId;
   if (employee.assignedMotorcycleName) {
-    document.getElementById('edit-assigned-motorcycle-display').textContent = 
+    document.getElementById('edit-assigned-motorcycle-display').textContent =
       `${employee.assignedMotorcycleName} - ${employee.assignedMotorcycleColor} - ${employee.assignedMotorcyclePlate}`;
     document.getElementById('edit-selected-assigned-motorcycle').value = employee.assignedMotorcycleId || '';
   } else {
@@ -1784,9 +1784,9 @@ async function submitNewRequest(event) {
     form.classList.remove('loading');
     return;
   }
-  const activeRequests = allData.filter(d => 
-    d.type === 'request' && 
-    d.motorcycleId === motorcycle.__backendId && 
+  const activeRequests = allData.filter(d =>
+    d.type === 'request' &&
+    d.motorcycleId === motorcycle.__backendId &&
     (d.status === 'pending' || d.status === 'active')
   );
 
@@ -1837,7 +1837,7 @@ async function submitNewRequest(event) {
     usageTime: '',
     status: 'pending'
   };
-const result = await window.dataSdk.create(requestData);
+  const result = await window.dataSdk.create(requestData);
   form.classList.remove('loading');
   if (result.isOk) {
     showToast('درخواست با موفقیت ثبت شد', '✅');
@@ -2072,7 +2072,7 @@ async function markAsExit(requestId) {
   const result = await window.dataSdk.update(updatedRequest);
   if (result.isOk) {
     showToast('خروج با موفقیت ثبت شد', '✅');
-    updateCurrentPage(); 
+    updateCurrentPage();
   } else {
     showToast('خطا در ثبت خروج', '❌');
   }
@@ -2114,7 +2114,7 @@ async function markAsEntry(requestId) {
 
 
 async function updateMotorcycleUsageAfterCompletion(request) {
-  if (request.status !== 'completed' && request.status !== 'delet') return;  
+  if (request.status !== 'completed' && request.status !== 'delet') return;
   const index = allData.findIndex(d =>
     d.type === 'motorcycle' &&
     d.motorcycleName === request.motorcycleName &&
@@ -2127,7 +2127,7 @@ async function updateMotorcycleUsageAfterCompletion(request) {
     return;
   }
   const motorcycle = allData[index];
-  const previousTotal = normalizeTime(motorcycle.totalUsageTime || '00:00');  
+  const previousTotal = normalizeTime(motorcycle.totalUsageTime || '00:00');
   const newUsage = normalizeTime(request.usageTime);
   const updatedTotal = addTimes(previousTotal, newUsage);
   console.log('Prev:', previousTotal, 'New:', newUsage, 'Final:', updatedTotal);
@@ -2638,7 +2638,7 @@ async function syncMotorcyclesWithGoogleSheets(allDataRef) {
         .map(moto => ({ ...moto, totalUsageTime: normalizeTime(moto.totalUsageTime || '00:00') }));
       const nonMotorcycleData = allDataRef.filter(d => d.type !== 'motorcycle');
       const localMotorcycles = allDataRef.filter(d => d.type === 'motorcycle')
-        .map(moto => ({ ...moto, totalUsageTime: normalizeTime(moto.totalUsageTime || '00:00') }));  
+        .map(moto => ({ ...moto, totalUsageTime: normalizeTime(moto.totalUsageTime || '00:00') }));
       const motorsMap = new Map(localMotorcycles.map(m => [m.__backendId, m]));
       gsMotorcycles.forEach(gsMoto => {
         if (motorsMap.has(gsMoto.__backendId)) {
@@ -2752,16 +2752,16 @@ function setTimeInterval(interval) {
     document.getElementById('custom-days-modal').classList.add('active');
     document.getElementById('custom-days-input').focus();
     document.getElementById('interval-dropdown').classList.add('hidden');
-    return; 
+    return;
   } else {
     currentTimeInterval = interval;
     currentCustomDays = 1;
-    currentIntervalDisplay = 
+    currentIntervalDisplay =
       interval === 'day' ? 'روز' :
-      interval === 'week' ? 'هفته' :
-      interval === 'month' ? 'ماه' :
-      interval === 'year' ? 'سال' :
-      'هیچکدام';
+        interval === 'week' ? 'هفته' :
+          interval === 'month' ? 'ماه' :
+            interval === 'year' ? 'سال' :
+              'هیچکدام';
 
     const intervalButton = document.getElementById('interval-button');
     if (intervalButton) {
@@ -2836,9 +2836,9 @@ function searchAssignedMotorcycles() {
     const dept = (m.motorcycleDepartment || '').toString().toLowerCase();
 
     return name.includes(searchTerm) ||
-           color.includes(searchTerm) ||
-           plate.includes(searchTerm) ||
-           dept.includes(searchTerm);
+      color.includes(searchTerm) ||
+      plate.includes(searchTerm) ||
+      dept.includes(searchTerm);
   });
 
   const container = document.getElementById('assigned-motorcycle-options');
@@ -2901,9 +2901,9 @@ function searchEditAssignedMotorcycles() {
     const dept = (m.motorcycleDepartment || '').toString().toLowerCase();
 
     return name.includes(searchTerm) ||
-           color.includes(searchTerm) ||
-           plate.includes(searchTerm) ||
-           dept.includes(searchTerm);
+      color.includes(searchTerm) ||
+      plate.includes(searchTerm) ||
+      dept.includes(searchTerm);
   });
 
   const container = document.getElementById('edit-assigned-motorcycle-options');
