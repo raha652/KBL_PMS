@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>مدیریت موتور سکیل‌ها - سیستم مدیریت موتور سکیل ها</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="./global.css" />
+  </head>
+  <body
+    class="h-screen"
+    style="
+      background: linear-gradient(
+        135deg,
+        #667eea 0%,
+        #764ba2 25%,
+        #667eea 50%,
+        #764ba2 75%,
+        #667eea 100%
+      );
+    "
+  >
+<div id="loading-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.65); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; color: white; font-size: 1rem;">
+  
+  <div class="motorbike-loader">
+    <div class="bike"><a href="https://ibb.co/kgFcnCHj">
+  <img class="small-img" src="https://i.ibb.co/kgFcnCHj/emojis-com-a-motor-bike-rideng-emoji.png" alt="emojis-com-a-motor-bike-rideng-emoji">
+</a>
+</div>
+    <div class="smoke smoke1">💨</div>
+    <div class="smoke smoke2">🌫️</div>
+  </div>
+  
+  <p style="margin: 10px 0 0; font-weight: bold; text-shadow: 0 0 10px rgba(255,255,255,0.5);">
+    در حال بارگذاری...
+  </p>
+</div>
+    <div class="h-screen p-6">
+      <div class="card p-6 mb-6" id="header-section">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-4">
+            <div
+              class="motorcycle-icon"
+              style="
+                background: linear-gradient(
+                  145deg,
+                  rgba(255, 255, 255, 0.3) 0%,
+                  rgba(255, 255, 255, 0.2) 100%
+                );
+              "
+            >
+              🏍️
+            </div>
+            <div>
+              <h1 id="dashboard-title" class="text-3xl font-bold text-white">
+                سیستم مدیریت موتور سکیل ها
+              </h1>
+              <p id="company-name" class="text-gray-300 mt-1">پارکینگ ولایت کابل</p>
+            </div>
+          </div>
+          <div class="text-left">
+            <p class="text-sm text-gray-300">تاریخ</p>
+            <p id="current-date" class="text-lg font-bold text-white"></p>
+          </div>
+        </div>
+      </div>
+      <div id="motorcycles-page">
+        <div class="card p-6">
+          <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-4">
+              <button
+                class="btn btn-secondary"
+                onclick="navigateTo('./management.html')"
+              >
+                ← بازگشت به مدیریت
+              </button>
+              <h2 class="text-2xl font-bold text-white">
+                مدیریت موتور سکیل‌ها
+              </h2>
+            </div>
+            <button class="btn btn-primary" onclick="openNewMotorcycleModal()">
+              ➕ افزودن موتور سکیل
+            </button>
+          </div>
+          <div
+            id="motorcycles-list"
+            class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+          ></div>
+        </div>
+      </div>
+    </div>
+    <div id="password-modal" class="modal">
+      <div class="modal-content">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6">🔐 احراز هویت</h2>
+        <div
+          class="mb-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg"
+        >
+          <p id="password-message" class="text-sm text-blue-800">
+            برای دسترسی به این بخش، رمز عبور را وارد کنید
+          </p>
+        </div>
+        <form id="password-form" onsubmit="verifyPassword(event)">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2"
+                >رمز عبور</label
+              >
+              <input
+                type="password"
+                id="password-input"
+                class="input-field"
+                placeholder="رمز عبور را وارد کنید"
+                required
+              />
+            </div>
+            <div class="flex gap-3 mt-6">
+              <button type="submit" class="btn btn-success flex-1">
+                ✅ تأیید
+              </button>
+              <button
+                type="button"
+                class="btn btn-secondary flex-1"
+                onclick="closeModal('password-modal')"
+              >
+                ❌ انصراف
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div id="new-request-modal" class="modal">
+      <div class="modal-content">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6">درخواست جدید</h2>
+        <form id="new-request-form" onsubmit="submitNewRequest(event)">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2"
+                >انتخاب دیپارتمنت</label
+              >
+              <div class="relative">
+                <button
+                  type="button"
+                  id="department-select"
+                  class="input-field text-right cursor-pointer flex items-center justify-between"
+                  onclick="toggleDepartmentDropdown()"
+                >
+                  <span id="department-display">دیپارتمنت را انتخاب کنید</span>
+                  <span>▼</span>
+                </button>
+                <div
+                  id="department-dropdown"
+                  class="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-hidden z-10 hidden"
+                >
+                  <div class="p-3 border-b border-gray-200">
+                    <input
+                      type="text"
+                      id="department-search"
+                      class="w-full p-2 border border-gray-300 rounded-md text-sm"
+                      placeholder="🔍 جستجو در دیپارتمنت‌ها..."
+                      oninput="searchDepartments()"
+                    />
+                  </div>
+                  <div
+                    id="department-options"
+                    class="max-h-48 overflow-y-auto"
+                  ></div>
+                </div>
+                <input type="hidden" id="selected-department" required />
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2"
+                >انتخاب کارمند</label
+              >
+              <div class="relative">
+                <button
+                  type="button"
+                  id="employee-select"
+                  class="input-field text-right cursor-pointer flex items-center justify-between opacity-50"
+                  onclick="toggleEmployeeDropdown()"
+                  disabled
+                >
+                  <span id="employee-display"
+                    >ابتدا دیپارتمنت را انتخاب کنید</span
+                  >
+                  <span>▼</span>
+                </button>
+                <div
+                  id="employee-dropdown"
+                  class="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-hidden z-10 hidden"
+                >
+                  <div class="p-3 border-b border-gray-200">
+                    <input
+                      type="text"
+                      id="employee-search"
+                      class="w-full p-2 border border-gray-300 rounded-md text-sm"
+                      placeholder="🔍 جستجو در کارمندان..."
+                      oninput="searchEmployees()"
+                    />
+                  </div>
+                  <div
+                    id="employee-options"
+                    class="max-h-48 overflow-y-auto"
+                  ></div>
+                </div>
+                <input type="hidden" id="selected-employee" required />
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2"
+                >انتخاب موتور سکیل</label
+              >
+              <div class="relative">
+                <button
+                  type="button"
+                  id="motorcycle-select"
+                  class="input-field text-right cursor-pointer flex items-center justify-between opacity-50"
+                  onclick="toggleMotorcycleDropdown()"
+                  disabled
+                >
+                  <span id="motorcycle-display"
+                    >ابتدا دیپارتمنت را انتخاب کنید</span
+                  >
+                  <span>▼</span>
+                </button>
+                <div
+                  id="motorcycle-dropdown"
+                  class="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-hidden z-10 hidden"
+                >
+                  <div class="p-3 border-b border-gray-200">
+                    <input
+                      type="text"
+                      id="motorcycle-search"
+                      class="w-full p-2 border border-gray-300 rounded-md text-sm"
+                      placeholder="🔍 جستجو در موتور سکیل‌ها..."
+                      oninput="searchMotorcycles()"
+                    />
+                  </div>
+                  <div
+                    id="motorcycle-options"
+                    class="max-h-48 overflow-y-auto"
+                  ></div>
+                </div>
+                <input type="hidden" id="selected-motorcycle" required />
+              </div>
+            </div>
+            <div class="flex gap-3 mt-6">
+              <button type="submit" class="btn btn-success flex-1">
+                ✅ ثبت درخواست
+              </button>
+              <button
+                type="button"
+                class="btn btn-secondary flex-1"
+                onclick="closeModal('new-request-modal')"
+              >
+                ❌ انصراف
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div id="new-motorcycle-modal" class="modal">
+      <div class="modal-content">
+        <h2 class="text-2xl font-bold text-gray-100 mb-6">
+          افزودن موتور سکیل جدید
+        </h2>
+        <form id="new-motorcycle-form" onsubmit="submitNewMotorcycle(event)">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >نام موتور سکیل</label
+              >
+              <input
+                type="text"
+                id="motorcycle-name"
+                class="input-field block text-sm font-semibold text-gray-700 mb-2"
+                placeholder="مثال: لمر"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >رنگ</label
+              >
+              <input
+                type="text"
+                id="motorcycle-color"
+                class="input-field text-gray-700 mb-2"
+                placeholder="مثال: آبی"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >آیدی</label
+              >
+              <input
+                type="text"
+                id="motorcycle-id"
+                class="input-field text-gray-700 mb-2"
+                placeholder="مثال: TRN_01"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >شماره پلاک</label
+              >
+              <input
+                type="text"
+                id="motorcycle-plate"
+                class="input-field text-gray-700 mb-2"
+                placeholder="مثال: TS-01"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >نوعیت اسناد</label
+              >
+              <select
+                id="motorcycle-document-type"
+                class="input-field block text-sm font-semibold text-gray-700 mb-2"
+                required
+                onchange="toggleLicenseField()"
+              >
+                <option value="">انتخاب کنید</option>
+                <option value="جواز سیر">جواز سیر</option>
+                <option value="اسناد صد فی صد">اسناد صد فی صد</option>
+                <option value="ندارد">ندارد</option>
+              </select>
+            </div>
+            <div id="license-number-field" style="display: none">
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >نمبر جواز سیر</label
+              >
+              <input
+                type="text"
+                id="motorcycle-license"
+                class="input-field text-gray-700 mb-2"
+                placeholder="مثال: 12345"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >نمبر شاسی</label
+              >
+              <input
+                type="text"
+                id="motorcycle-chassis-number"
+                class="input-field text-gray-700 mb-2"
+                placeholder="مثال: CHS-001"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >نمبر انجین</label
+              >
+              <input
+                type="text"
+                id="motorcycle-engine-number"
+                class="input-field text-gray-700 mb-2"
+                placeholder="مثال: ENG-001"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >جی پی اس</label
+              >
+              <select
+                id="motorcycle-gps"
+                class="input-field block text-sm font-semibold text-gray-700 mb-2"
+                onchange="toggleGpsStatusField()"
+              >
+                <option value="">انتخاب کنید</option>
+                <option value="دارد">دارد</option>
+                <option value="ندارد">ندارد</option>
+              </select>
+            </div>
+            <div id="gps-status-field" style="display: none">
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >وضعیت جی پی اس</label
+              >
+              <select
+                id="motorcycle-gps-status"
+                class="input-field block text-sm font-semibold text-gray-700 mb-2"
+              >
+                <option value="">انتخاب کنید</option>
+                <option value="فعال">فعال</option>
+                <option value="غیر فعال">غیر فعال</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >دیپارتمنت</label
+              >
+              <input
+                type="text"
+                id="motorcycle-department"
+                class="input-field text-gray-700 mb-2"
+                placeholder="مثال: پاور"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >URL عکس (اختیاری)</label
+              >
+              <input
+                type="text"
+                id="motorcycle-photo"
+                class="input-field text-gray-700 mb-2"
+                placeholder="مثال: https://example.com/photo.jpg"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >URL اسناد (اختیاری)</label
+              >
+              <input
+                type="text"
+                id="motorcycle-documents"
+                class="input-field text-gray-700 mb-2"
+                placeholder="مثال: https://example.com/documents.jpg"
+              />
+            </div>
+            <div class="flex gap-3 mt-6">
+              <button type="submit" class="btn btn-success flex-1">
+                ✅ ذخیره
+              </button>
+              <button
+                type="button"
+                class="btn btn-secondary flex-1"
+                onclick="closeModal('new-motorcycle-modal')"
+              >
+                ❌ انصراف
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div id="edit-motorcycle-modal" class="modal">
+      <div class="modal-content">
+        <h2 class="text-2xl font-bold text-gray-100 mb-6">ویرایش موتور سکیل</h2>
+        <form id="edit-motorcycle-form" onsubmit="submitEditMotorcycle(event)">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >نام موتور سکیل</label
+              >
+              <input
+                type="text"
+                id="edit-motorcycle-name"
+                class="input-field text-gray-800 mb-2"
+                placeholder="مثال: لمر"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >رنگ</label
+              >
+              <input
+                type="text"
+                id="edit-motorcycle-color"
+                class="input-field text-gray-800 mb-2"
+                placeholder="مثال: آبی"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >آیدی</label
+              >
+              <input
+                type="text"
+                id="edit-motorcycle-id"
+                class="input-field text-gray-800 mb-2"
+                placeholder="مثال: TRN_01"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >شماره پلاک</label
+              >
+              <input
+                type="text"
+                id="edit-motorcycle-plate"
+                class="input-field text-gray-800 mb-2"
+                placeholder="مثال: TS-01"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >نوعیت اسناد</label
+              >
+              <select
+                id="edit-motorcycle-document-type"
+                class="input-field text-gray-800 mb-2"
+                required
+                onchange="toggleEditLicenseField()"
+              >
+                <option value="">انتخاب کنید</option>
+                <option value="جواز سیر">جواز سیر</option>
+                <option value="اسناد صد فی صد">اسناد صد فی صد</option>
+                <option value="ندارد">ندارد</option>
+              </select>
+            </div>
+            <div id="edit-license-number-field" style="display: none">
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >نمبر جواز سیر</label
+              >
+              <input
+                type="text"
+                id="edit-motorcycle-license"
+                class="input-field text-gray-800 mb-2"
+                placeholder="مثال: 12345"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >نمبر شاسی</label
+              >
+              <input
+                type="text"
+                id="edit-motorcycle-chassis-number"
+                class="input-field text-gray-800 mb-2"
+                placeholder="مثال: CHS-001"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >نمبر انجین</label
+              >
+              <input
+                type="text"
+                id="edit-motorcycle-engine-number"
+                class="input-field text-gray-800 mb-2"
+                placeholder="مثال: ENG-001"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >جی پی اس</label
+              >
+              <select
+                id="edit-motorcycle-gps"
+                class="input-field text-gray-800 mb-2"
+                onchange="toggleEditGpsStatusField()"
+              >
+                <option value="">انتخاب کنید</option>
+                <option value="دارد">دارد</option>
+                <option value="ندارد">ندارد</option>
+              </select>
+            </div>
+            <div id="edit-gps-status-field" style="display: none">
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >وضعیت جی پی اس</label
+              >
+              <select
+                id="edit-motorcycle-gps-status"
+                class="input-field text-gray-800 mb-2"
+              >
+                <option value="">انتخاب کنید</option>
+                <option value="فعال">فعال</option>
+                <option value="غیر فعال">غیر فعال</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >دیپارتمنت</label
+              >
+              <input
+                type="text"
+                id="edit-motorcycle-department"
+                class="input-field text-gray-800 mb-2"
+                placeholder="مثال: پاور"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >URL عکس (اختیاری)</label
+              >
+              <input
+                type="text"
+                id="edit-motorcycle-photo"
+                class="input-field text-gray-800 mb-2"
+                placeholder="مثال: https://example.com/photo.jpg"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-100 mb-2"
+                >URL اسناد (اختیاری)</label
+              >
+              <input
+                type="text"
+                id="edit-motorcycle-documents"
+                class="input-field text-gray-800 mb-2"
+                placeholder="مثال: https://example.com/documents.jpg"
+              />
+            </div>
+            <div class="flex gap-3 mt-6">
+              <button type="submit" class="btn btn-success flex-1">
+                ✅ ذخیره تغییرات
+              </button>
+              <button
+                type="button"
+                class="btn btn-secondary flex-1"
+                onclick="closeModal('edit-motorcycle-modal')"
+              >
+                ❌ انصراف
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div id="motorcycle-details-modal" class="modal">
+      <div class="modal-content max-w-2xl relative">
+        <button
+          class="close-btn"
+          onclick="closeModal('motorcycle-details-modal')"
+        >
+          ❌
+        </button>
+        <h2 class="text-2xl font-bold text-gray-300 mb-6">
+          🏍️ جزئیات کامل موتور سکیل
+        </h2>
+        <div
+          id="motorcycle-details-content"
+          class="space-y-6 bg-gray-50 p-6 rounded-xl"
+        >
+        </div>
+        <div class="flex gap-3 mt-6 pt-4 border-t">
+          <button id="edit-from-details-btn" class="btn btn-primary flex-1">
+            ✏️ ویرایش
+          </button>
+          <button id="delete-from-details-btn" class="btn btn-danger flex-1">
+            🗑️ حذف
+          </button>
+        </div>
+      </div>
+    </div>
+    <div id="new-employee-modal" class="modal">
+      <div class="modal-content">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6">
+          افزودن کارمند جدید
+        </h2>
+        <form id="new-employee-form" onsubmit="submitNewEmployee(event)">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2"
+                >نام و نام خانوادگی</label
+              >
+              <input
+                type="text"
+                id="employee-name"
+                class="input-field"
+                placeholder="مثال: شهاب حمیدی"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2"
+                >آیدی</label
+              >
+              <input
+                type="text"
+                id="employee-id"
+                class="input-field"
+                placeholder="مثال: 1806"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2"
+                >دیپارتمنت</label
+              >
+              <input
+                type="text"
+                id="employee-department"
+                class="input-field"
+                placeholder="مثال: پاور"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2"
+                >شناسه اثر انگشت</label
+              >
+              <input
+                type="text"
+                id="employee-fingerprint"
+                class="input-field"
+                placeholder="مثال: SH001"
+                required
+              />
+            </div>
+            <div class="flex gap-3 mt-6">
+              <button type="submit" class="btn btn-success flex-1">
+                ✅ ذخیره
+              </button>
+              <button
+                type="button"
+                class="btn btn-secondary flex-1"
+                onclick="closeModal('new-employee-modal')"
+              >
+                ❌ انصراف
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div id="toast" class="toast">
+      <span id="toast-icon">✅</span> <span id="toast-message"></span>
+    </div>
+    <script src="./googleSheets.js"></script>
+    <script src="./index.js"></script>
+  </body>
+</html>
+
+

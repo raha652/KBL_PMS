@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>مصارف موتور سکیل ها</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="stylesheet" href="./global.css">
+</head>
+<body class="h-screen" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #667eea 50%, #764ba2 75%, #667eea 100%);">
+  <div class="h-screen p-6">
+    <div class="card p-6 mb-6" id="header-section">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <div class="motorcycle-icon" style="background: linear-gradient(145deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.2) 100%);">
+            💸
+          </div>
+          <div>
+            <h1 class="text-3xl font-bold text-white">مصارف موتور سکیل ها</h1>
+            <p class="text-gray-300 mt-1">پارکینگ ولایت کابل</p>
+          </div>
+        </div>
+        <div class="text-left">
+          <p class="text-sm text-gray-300">تاریخ</p>
+          <p id="current-date" class="text-lg font-bold text-white"></p>
+        </div>
+      </div>
+    </div>
+    <div class="card p-6 mb-6">
+      <div class="flex items-center justify-between mb-6">
+        <button class="btn btn-secondary" onclick="navigateTo('./management.html')"> ← بازگشت به مدیریت </button>
+        <h2 class="text-2xl font-bold text-white">پنل مصارف</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="card p-8 cursor-pointer hover:scale-105 transition-all duration-300" onclick="navigateTo('./fuel-expenses.html')">
+          <div class="text-center">
+            <div class="text-6xl mb-4">⛽</div>
+            <h3 class="text-xl font-bold text-white mb-2">مصارف تیل</h3>
+            <p class="text-gray-300 text-sm">ثبت و مدیریت مصارف تیل</p>
+          </div>
+        </div>
+        <div class="card p-8 cursor-pointer hover:scale-105 transition-all duration-300" onclick="navigateTo('./usage-amount.html')">
+          <div class="text-center">
+            <div class="text-6xl mb-4">📊</div>
+            <h3 class="text-xl font-bold text-white mb-2">میزان استفاده ی موتور سکیل</h3>
+            <p class="text-gray-300 text-sm">گزارش میزان استفاده</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="./googleSheets.js"></script>
+  <script src="./index.js"></script>
+</body>
+
+</html>

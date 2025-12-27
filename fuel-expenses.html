@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>مصارف تیل</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="stylesheet" href="./global.css">
+</head>
+<body class="h-screen" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #667eea 50%, #764ba2 75%, #667eea 100%);">
+<div id="loading-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.65); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; color: white; font-size: 1rem;">
+  <div class="motorbike-loader">
+    <div class="bike"><a href="https://ibb.co/kgFcnCHj">
+  <img class="small-img" src="https://i.ibb.co/kgFcnCHj/emojis-com-a-motor-bike-rideng-emoji.png" alt="emojis-com-a-motor-bike-rideng-emoji">
+</a>
+</div>
+    <div class="smoke smoke1">💨</div>
+    <div class="smoke smoke2">🌫️</div>
+  </div>
+  <p style="margin: 10px 0 0; font-weight: bold; text-shadow: 0 0 10px rgba(255,255,255,0.5);">
+    در حال بارگذاری...
+  </p>
+</div>
+  <div class="h-screen p-6">
+    <div class="card p-6 mb-6" id="header-section">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <div class="motorcycle-icon" style="background: linear-gradient(145deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.2) 100%);">
+            ⛽
+          </div>
+          <div>
+            <h1 class="text-3xl font-bold text-white">مصارف تیل</h1>
+            <p class="text-gray-300 mt-1">پارکینگ ولایت کابل</p>
+          </div>
+        </div>
+        <div class="text-left">
+          <p class="text-sm text-gray-300">تاریخ</p>
+          <p id="current-date" class="text-lg font-bold text-white"></p>
+        </div>
+      </div>
+    </div>
+    <div class="card p-6 mb-6">
+      <div class="flex items-center justify-between mb-6">
+        <button class="btn btn-secondary" onclick="navigateTo('./fuel-consumption.html')"> ← بازگشت </button>
+        <h2 class="text-2xl font-bold text-white">لیست مصارف تیل</h2>
+      </div>
+      <div class="flex items-center justify-between mb-4">
+        <button class="btn btn-success" onclick="openFuelReportModal()">ثبت گزارش</button>
+        <div class="relative w-full p-4">
+          <input type="text" id="fuel-search" class="input-field pl-10 text-gray-800 mt-2" placeholder="جستجو بر اساس نام موتور سکیل ...">
+        </div>
+      </div>
+      </div>
+       <div class="card p-6 mb-6">               
+<div id="motorcycles-fuel-list" class="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-y-auto max-h-900 p-3 mb-4">
+</div>
+ </div>
+<div id="motorcycle-reports-modal" class="modal">
+  <div class="modal-content32">
+    <h2 class="text-2xl font-bold text-gray-300 mb-6" id="motorcycle-reports-title">گزارش‌های تیل برای موتور</h2>
+    <div class="mb-4">
+      <label class="block text-sm font-semibold text-gray-300 mb-2">جستجو بر اساس تاریخ:</label>
+      <input type="date" id="fuel-report-date-search" class="input-field text-gray-800 mt-1" onchange="filterFuelReportsByDate()">
+    </div>
+    <div id="motorcycle-reports-list" class="grid grid-cols-1 sm:grid-cols-3 gap-4 overflow-y-auto max-h-96 p-4">
+    </div>
+    <div class="flex gap-3 mt-6">
+      <button type="button" class="btn btn-secondary flex-1" onclick="closeModal('motorcycle-reports-modal')">❌ بستن</button>
+    </div>
+  </div>
+</div>
+    </div>
+  </div>
+  
+  <div id="fuel-report-modal" class="modal">
+    <div class="modal-content">
+      <h2 class="text-2xl font-bold text-gray-300 mb-6">ثبت گزارش مصارف تیل</h2>
+      <form id="fuel-report-form" onsubmit="submitFuelReport(event)">
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-semibold text-gray-300 mb-2">انتخاب موتور سکیل</label>
+            <div class="relative">
+              <button type="button" id="fuel-motorcycle-select" class="input-field text-right cursor-pointer flex items-center justify-between text-gray-700 mt-1" onclick="toggleFuelMotorcycleDropdown()">
+                <span id="fuel-motorcycle-display">موتور سکیل را انتخاب کنید</span> <span>▼</span>
+              </button>
+              <div id="fuel-motorcycle-dropdown" class="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-hidden z-10 hidden">
+                <div class="p-3 border-b border-gray-200">
+                  <input type="text" id="fuel-motorcycle-search" class="w-full p-2 border border-gray-800 rounded-md text-sm" placeholder="🔍 جستجو در موتور سکیل‌ها..." oninput="searchFuelMotorcycles()">
+                </div>
+                <div id="fuel-motorcycle-options" class="max-h-48 overflow-y-auto text-gray-800 mt-1"></div>
+              </div>
+              <input type="hidden" id="selected-fuel-motorcycle" required>
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-gray-300 mb-2">نوعیت تیل</label>
+            <select id="fuel-type" class="input-field text-gray-800 mt-1" required>
+              <option value="">انتخاب کنید</option>
+              <option value="پطرول">پطرول</option>
+              <option value="دیزل">دیزل</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-gray-300 mb-2">مقدار تیل</label>
+            <input type="number" id="fuel-amount" class="input-field text-gray-800 mt-1" placeholder="مثال: 5 لیتر" required step="0.1">
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-gray-300 mb-2">میزان کیلومتر</label>
+            <input type="number" id="kilometer-amount" class="input-field text-gray-800 mt-1" placeholder="مثال: 100 کیلومتر" required step="0.1">
+          </div>
+          <div class="flex gap-3 mt-6">
+            <button type="submit" class="btn btn-success flex-1">✅ ثبت</button>
+            <button type="button" class="btn btn-secondary flex-1" onclick="closeModal('fuel-report-modal')">❌ انصراف</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div id="toast" class="toast"><span id="toast-icon">✅</span> <span id="toast-message"></span></div>
+  <script src="./googleSheets.js"></script>
+  <script src="./index.js"></script>
+</body>
+</html>
