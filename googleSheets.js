@@ -1,4 +1,4 @@
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxBm3Ud2t4rQZTQ7VK_XPAutLMg7PKQtroBNqZcFOWlvF85m--FI3khIXNpMg8nsJmj/exec'; 
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz3G5zVx69VGRws4cYdjPQhQIbmNJQqzxEH6VpbYvlD97V5fdV64zMPYSV-6a6Se0J8/exec'; 
 async function callGoogleSheets(action, sheetName, data = null) {
   try {
     const params = new URLSearchParams({
@@ -308,6 +308,7 @@ async function syncFuelReports() {
     return false;
   }
 }
+
 
 
 
