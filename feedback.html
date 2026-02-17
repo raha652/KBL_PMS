@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>نظریات و پیشنهادات - سیستم مدیریت موتور سکیل ها</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="stylesheet" href="./global.css">
+</head>
+<body class="h-screen bg-gray-950 text-white">
+
+<div id="loading-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.65); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; color: white; font-size: 1rem;">
+  <div class="motorbike-loader">
+    <div class="bike">
+      <img class="small-img" src="https://i.ibb.co/kgFcnCHj/emojis-com-a-motor-bike-rideng-emoji.png" alt="loader-bike">
+    </div>
+    <div class="smoke smoke1">💨</div>
+    <div class="smoke smoke2">🌫️</div>
+  </div>
+  <p style="margin: 10px 0 0; font-weight: bold; text-shadow: 0 0 10px rgba(255,255,255,0.5);">
+    در حال بارگذاری...
+  </p>
+</div>
+
+<div class="h-screen p-6">
+  <!-- هدر -->
+  <div class="card p-6 mb-6" id="header-section">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <div class="motorcycle-icon">✍️</div>
+        <div>
+          <h1 class="text-3xl font-bold text-white">نظریات و پیشنهادات</h1>
+          <p class="text-gray-300 mt-1">پارکینگ ولایت کابل</p>
+        </div>
+      </div>
+      <div class="text-left">
+        <p class="text-sm text-gray-300">تاریخ</p>
+        <p id="current-date" class="text-lg font-bold text-white"></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-6">
+    <div class="flex items-center justify-between mb-6">
+      <button class="btn btn-secondary" onclick="navigateTo('./request-menu.html')">← بازگشت به منوی درخواست</button>
+    </div>
+
+    <h3 class="text-xl font-bold mb-6 text-center">نوع گزارش را انتخاب کنید</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div onclick="startNewReport('پیشنهاد')" class="card p-6 text-center cursor-pointer hover:bg-emerald-900/30 border border-emerald-500/30 rounded-xl">
+        <div class="text-5xl mb-3">💡</div>
+        <h3 class="font-bold text-lg">پیشنهاد</h3>
+        <p class="text-sm text-gray-200 mt-1">ایده یا پیشنهاد برای بهبود سیستم</p>
+      </div>
+      <div onclick="startNewReport('نظریه')" class="card p-6 text-center cursor-pointer hover:bg-amber-900/30 border border-amber-500/30 rounded-xl">
+        <div class="text-5xl mb-3">🗣️</div>
+        <h3 class="font-bold text-lg">نظریه / مشکلات</h3>
+        <p class="text-sm text-gray-200 mt-1">ثبت مشکلات موتور سکیل ها</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- فرم ثبت گزارش -->
+<div id="new-feedback-modal" class="modal">
+  <div class="modal-content">
+    <h2 id="modal-title" class="text-2xl font-bold mb-6">ثبت گزارش جدید</h2>
+    
+    <div class="mb-6 p-5 bg-gradient-to-r from-gray-800 to-gray-900 rounded-xl border border-gray-700 shadow-lg">
+      <div class="flex flex-wrap items-center gap-6">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-full flex items-center justify-center shadow-md">
+            <span class="text-white text-lg">👤</span>
+          </div>
+          <div>
+            <p class="text-xs text-gray-400 mb-0.5">نام و نام خانوادگی</p>
+            <p id="reporter-name" class="text-white font-bold text-base"></p>
+          </div>
+        </div>
+        <div class="h-8 w-px bg-gray-600 hidden sm:block"></div>
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center shadow-md">
+            <span class="text-white text-lg">🏢</span>
+          </div>
+          <div>
+            <p class="text-xs text-gray-400 mb-0.5">دیپارتمنت</p>
+            <p id="reporter-dept" class="text-white font-bold text-base"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <form id="feedback-form" onsubmit="submitFeedback(event)">
+      <input type="hidden" id="feedback-type">
+
+      <div id="motorcycle-field" class="mb-5">
+        <label class="block text-sm font-semibold mb-2 text-gray-300">
+          <span class="flex items-center gap-2">
+            <span class="text-lg">🏍️</span>
+            انتخاب موتور سکیل
+          </span>
+        </label>
+        <div class="relative">
+          <div id="motorcycle-color-indicator" class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-gray-400 bg-gray-600 transition-colors duration-300"></div>
+          <select id="feedback-motorcycle" class="input-field w-full pr-10 cursor-pointer"></select>
+        </div>
+        <p id="motorcycle-info" class="text-xs text-gray-400 mt-2 hidden"></p>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-sm font-semibold mb-2" id="content-label">متن پیشنهاد / نظریه</label>
+        <textarea id="feedback-content" class="input-field w-full h-40 resize-y text-gray-700" placeholder="لطفاً نظر خود را بنویسید..." required></textarea>
+      </div>
+
+      <div class="flex gap-3">
+        <button type="submit" class="btn btn-success flex-1">ثبت گزارش</button>
+        <button type="button" onclick="closeModal('new-feedback-modal')" class="btn btn-secondary flex-1">انصراف</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Toast Notification -->
+<div id="toast" class="toast">
+  <span id="toast-icon" class="text-2xl">✅</span>
+  <span id="toast-message" class="font-medium text-gray-800 mt-2">پیام موفقیت</span>
+</div>
+
+<script src="./googleSheets.js"></script>
+<script src="./index.js"></script>
+<script src="./feedback.js"></script> 
+</body>
+</html>

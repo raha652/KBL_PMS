@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>اعلانات</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="stylesheet" href="./global.css">
+ </head>
+ <body class="h-screen">
+
+<div id="loading-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.65); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; color: white; font-size: 1rem;">
+  
+  <div class="motorbike-loader">
+    <div class="bike"><a href="https://ibb.co/kgFcnCHj">
+  <img class="small-img" src="https://i.ibb.co/bRWrRnPF/hh-removebg-preview.png" alt="emojis-com-a-motor-bike-rideng-emoji">
+</a>
+</div>
+    <div class="smoke smoke1">📧</div>
+    <div class="smoke smoke2">📩</div>
+  </div>
+  
+  <p style="margin: 10px 0 0; font-weight: bold; text-shadow: 0 0 10px rgba(255,255,255,0.5);">
+    در حال بارگذاری...
+  </p>
+</div>
+
+  <div class="h-screen p-6">
+   <div class="card p-6 mb-6" id="header-section">
+    <div class="flex items-center justify-between">
+     <div class="flex items-center gap-4">
+      <button onclick="navigateTo('./index.html')" class="w-10 h-10 rounded-full bg-gray-800 bg-opacity-80 flex items-center justify-center cursor-pointer hover:bg-opacity-100 transition-all duration-200 text-xl text-white border border-gray-800">
+       ☛
+      </button>
+      <div>
+       <h1 class="text-3xl font-bold text-white">🔔 اعلانات</h1>
+       <p class="text-gray-300 mt-1">مشاهده و ثبت اعلانات</p>
+      </div>
+     </div>
+     <div class="flex items-center gap-4 relative">
+       <div class="text-right"> 
+         <p id="current-user" class="text-lg font-bold text-white">---</p>
+         <p id="current-user-position" class="text-sm text-gray-100">---</p> 
+       </div>
+       <div class="relative">
+         <div id="user-profile-icon" class="w-10 h-10 rounded-full bg-white bg-opacity-20 flex items-center justify-center cursor-pointer hover:bg-opacity-30 transition-all duration-200" onclick="toggleUserDropdown()">
+           👤
+         </div>
+       </div>
+     </div>
+    </div>
+   </div>
+
+    <div id="user-dropdown" class="absolute hidden z-50 w-48 bg-white rounded-lg shadow-lg">
+      <div class="py-2">
+        <button onclick="navigateTo('./index.html')" class="w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded">🏠 صفحه اصلی</button>
+        <button onclick="navigateTo('./profile-settings.html')" class="w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded">تنظیمات پروفایل</button>
+        <button onclick="logout()" class="w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded">خروج</button>
+      </div>
+    </div>
+
+   <!-- New Notification Button -->
+   <div class="mb-6">
+     <button onclick="openNewNotificationModal()" class="btn btn-success px-6 py-3 text-lg text-white">
+       ➕ ثبت اعلان جدید
+     </button>
+   </div>
+
+   <!-- Notifications List -->
+   <div id="notifications-list" class="flex flex-col gap-3">
+     <!-- Notifications will be loaded here -->
+   </div>
+  </div>
+
+  <!-- New Notification Modal -->
+  <div id="new-notification-modal" class="modal">
+   <div class="modal-content">
+     <h2 class="text-2xl font-bold text-white mb-6">📝 ثبت اعلان جدید</h2>
+     <form id="new-notification-form" onsubmit="submitNewNotification(event)">
+       <div class="space-y-4">
+         <div>
+           <label class="block text-sm font-semibold text-white mb-2">عنوان اعلان</label>
+           <input type="text" id="notification-title" class="input-field text-gray-700" placeholder="عنوان اعلان را وارد کنید" required>
+         </div>
+         <div>
+           <label class="block text-sm font-semibold text-white mb-2">متن اعلان</label>
+           <textarea id="notification-message" class="input-field text-black" rows="4" placeholder="متن اعلان را وارد کنید" required></textarea>
+         </div>
+         <div class="bg-gray-100 p-4 rounded-lg">
+           <p class="text-sm text-gray-600"><strong>نام کامل:</strong> <span id="notification-author">---</span></p>
+           <p class="text-sm text-gray-600"><strong>دیپارتمنت:</strong> <span id="notification-dept">---</span></p>
+         </div>
+         <div class="flex gap-3 mt-6">
+           <button type="submit" class="btn btn-success flex-1">✅ ثبت اعلان</button>
+           <button type="button" class="btn btn-secondary flex-1" onclick="closeModal('new-notification-modal')">❌ انصراف</button>
+         </div>
+       </div>
+     </form>
+   </div>
+  </div>
+
+  <div id="toast" class="toast">
+   <span id="toast-icon">✅</span> <span id="toast-message"></span>
+  </div>
+
+  <script src="./googleSheets.js"></script>
+  <script src="./index.js"></script>
+  <script>
+    let notifications = [];
+    
+    async function initNotifications() {
+      showLoading();
+      
+      // Check authentication
+      const sessionStr = localStorage.getItem('session');
+      if (!sessionStr) {
+        window.location.href = './login.html';
+        hideLoading();
+        return;
+      }
+      
+      const session = JSON.parse(sessionStr);
+      await loadUsers();
+      const currentUser = allUsers.find(u => u.username === session.username);
+      
+      if (!currentUser) {
+        window.location.href = './login.html';
+        hideLoading();
+        return;
+      }
+      
+      window.currentUser = currentUser;
+      
+      // Set user info
+      document.getElementById('current-user').textContent = currentUser.fullName;
+      document.getElementById('current-user-position').textContent = currentUser.position;
+      
+      // Set author info for notification
+      document.getElementById('notification-author').textContent = currentUser.fullName;
+      document.getElementById('notification-dept').textContent = currentUser.department;
+      
+      // Set profile icon
+      const userIcon = document.getElementById('user-profile-icon');
+      if (userIcon) {
+        if (currentUser.photo) {
+          userIcon.innerHTML = `<img src="${currentUser.photo}" alt="Profile" class="w-full h-full rounded-full object-cover">`;
+        } else {
+          userIcon.innerHTML = '👤';
+        }
+      }
+      
+      // Load notifications
+      await loadNotifications();
+      
+      // Mark all notifications as read when user views them
+      if (notifications.length > 0) {
+        const notificationIds = notifications.map(n => n.__backendId);
+        if (typeof markAllNotificationsAsRead === 'function') {
+          markAllNotificationsAsRead(notificationIds);
+        }
+      }
+      
+      // Check if user can create notifications
+      const displays = currentUser.customDisplays ? currentUser.customDisplays.split(',') : [];
+      const canCreateNotifications = displays.includes('اعلانات');
+      
+      const newNotificationBtn = document.querySelector('button[onclick="openNewNotificationModal()"]');
+      if (newNotificationBtn) {
+        if (!canCreateNotifications) {
+          newNotificationBtn.classList.add('hidden');
+        }
+      }
+      
+      hideLoading();
+    }
+    
+    async function loadNotifications() {
+      try {
+        const result = await callGoogleSheets('readAll', 'alarm');
+        console.log('Google Sheets result:', result);
+        if (result.success && result.data) {
+          console.log('Raw data from Google Sheets:', result.data);
+          notifications = result.data
+            .map(mapGSToNotification)
+            .filter(n => n.__backendId);
+          console.log('Mapped notifications:', notifications);
+          notifications.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+          
+          renderNotifications();
+        } else {
+          console.error('No data or failed:', result);
+        }
+      } catch (error) {
+        console.error('Error loading notifications:', error);
+        showToast('خطا در بارگذاری اعلانات', '❌');
+      }
+    }
+    
+    function mapGSToNotification(gs) {
+      console.log('Mapping record:', gs);
+      console.log('Keys:', Object.keys(gs));
+      
+      // Try to find the ID from various possible keys
+      let id = gs.__backendId || gs.id || gs['Unique ID'];
+      if (!id) {
+        console.warn('No ID found for record:', gs);
+      }
+      
+      return {
+        __backendId: id,
+        title: gs.title || gs['عنوان'] || '',
+        message: gs.message || gs['متن'] || '',
+        authorName: gs.authorName || gs['نام کامل'] || '',
+        authorDepartment: gs.authorDepartment || gs['دیپارتمنت'] || '',
+        createdAt: gs.createdAt || gs['تاریخ'] || new Date().toISOString()
+      };
+    }
+    
+    function mapNotificationToGS(notification) {
+      return {
+        'Unique ID': notification.__backendId,
+        'عنوان': notification.title,
+        'متن': notification.message,
+        'نام کامل': notification.authorName,
+        'دیپارتمنت': notification.authorDepartment,
+        'تاریخ': formatNotificationDate(notification.createdAt)
+      };
+    }
+    
+    function formatNotificationDate(dateValue) {
+      let date;
+      if (typeof dateValue === 'string') {
+        date = new Date(dateValue);
+      } else if (dateValue instanceof Date) {
+        date = dateValue;
+      } else {
+        date = new Date();
+      }
+      
+      if (isNaN(date.getTime())) {
+        date = new Date();
+      }
+      
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      
+      return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
+    }
+    
+    function renderNotifications() {
+      const container = document.getElementById('notifications-list');
+      
+      if (notifications.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full text-center py-12 text-gray-300">
+            <p class="text-6xl mb-4">📭</p>
+            <p class="text-lg">هیچ اعلانی ثبت نشده است</p>
+          </div>
+        `;
+        return;
+      }
+      
+      container.innerHTML = notifications.map(n => {
+        const formattedDate = formatNotificationDateForDisplay(n.createdAt);
+        
+        return `
+          <div class="card p-4 mb-3">
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex items-center gap-3 flex-1">
+                <span class="text-2xl">📢</span>
+                <div class="flex-1">
+                  <h3 class="text-base font-bold text-white">${escapeHtml(n.title)}</h3>
+                  <p class="text-gray-300 text-sm">${escapeHtml(n.message)}</p>
+                </div>
+              </div>
+              <div class="text-left whitespace-nowrap">
+                <p class="text-sm text-gray-300">👤 ${escapeHtml(n.authorName)}</p>
+                <p class="text-xs text-gray-400">📅 ${formattedDate}</p>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    function formatNotificationDateForDisplay(dateValue) {
+      // If already in readable format (YYYY/MM/DD HH:MM:SS), return as is
+      if (typeof dateValue === 'string' && /^\d{4}\/\d{2}\/\d{2}\s\d{2}:\d{2}/.test(dateValue.trim())) {
+        return dateValue.trim();
+      }
+      
+      let date;
+      if (typeof dateValue === 'string') {
+        date = new Date(dateValue);
+      } else if (dateValue instanceof Date) {
+        date = dateValue;
+      } else {
+        date = new Date();
+      }
+      
+      if (isNaN(date.getTime())) {
+        return dateValue || 'نامشخص';
+      }
+      
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      
+      return `${year}/${month}/${day} ${hours}:${minutes}`;
+    }
+    
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+    
+    function openNewNotificationModal() {
+      document.getElementById('new-notification-form').reset();
+      document.getElementById('new-notification-modal').classList.add('active');
+    }
+    
+    async function submitNewNotification(event) {
+      event.preventDefault();
+      
+      const title = document.getElementById('notification-title').value.trim();
+      const message = document.getElementById('notification-message').value.trim();
+      
+      if (!title || !message) {
+        showToast('لطفاً همه فیلدها را پر کنید', '⚠️');
+        return;
+      }
+      
+      const now = new Date();
+      const notification = {
+        __backendId: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        title: title,
+        message: message,
+        authorName: window.currentUser.fullName,
+        authorDepartment: window.currentUser.department,
+        createdAt: now.toISOString()
+      };
+      
+      const gsData = mapNotificationToGS(notification);
+      const result = await callGoogleSheets('create', 'alarm', gsData);
+      
+      if (result.success) {
+        showToast('اعلان با موفقیت ثبت شد', '✅');
+        closeModal('new-notification-modal');
+        notifications.unshift(notification);
+        renderNotifications();
+      } else {
+        showToast('خطا در ثبت اعلان', '❌');
+      }
+    }
+    
+    function toggleUserDropdown() {
+      const dropdown = document.getElementById('user-dropdown');
+      const icon = document.getElementById('user-profile-icon');
+      if (!dropdown || !icon) return;
+      
+      const rect = icon.getBoundingClientRect();
+      dropdown.style.position = 'fixed';
+      dropdown.style.top = rect.bottom + 8 + 'px';
+      dropdown.style.left = rect.left + 'px';
+      dropdown.classList.toggle('hidden');
+    }
+    
+    function showLoading() {
+      document.getElementById('loading-overlay').style.display = 'flex';
+    }
+    
+    function hideLoading() {
+      document.getElementById('loading-overlay').style.display = 'none';
+    }
+    
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.remove('active');
+    }
+    
+    function showToast(message, icon = '✅') {
+      const toast = document.getElementById('toast');
+      document.getElementById('toast-message').textContent = message;
+      document.getElementById('toast-icon').textContent = icon;
+      toast.classList.add('active');
+      setTimeout(() => toast.classList.remove('active'), 3000);
+    }
+    
+    // Close dropdown on click outside
+    document.addEventListener('click', function(event) {
+      const dropdown = document.getElementById('user-dropdown');
+      const icon = document.getElementById('user-profile-icon');
+      if (dropdown && icon && !icon.contains(event.target) && !dropdown.contains(event.target)) {
+        dropdown.classList.add('hidden');
+      }
+    });
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', initNotifications);
+  </script>
+ </body>
+</html>

@@ -4,6 +4,40 @@ let currentUser = null;
 function generateId() {
   return Date.now().toString() + Math.random().toString(36).substr(2, 9);
 }
+
+// Google Sheets functions
+async function callGoogleSheets(action, sheetName, data = null) {
+  try {
+    const params = new URLSearchParams({
+      action,
+      sheet: sheetName,
+      ...(data && { data: JSON.stringify(data) })
+    });
+    const response = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Error calling Google Sheets:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+function mapUserToGS(item) {
+  return {
+    'Unique ID': item.__backendId,
+    'نام کامل': item.fullName,
+    'نام کاربری': item.username,
+    'رمز عبور': item.password,
+    'نقش': item.role,
+    'موقعیت شغلی': item.position || 'نامشخص',
+    'دیپارتمنت': item.department || 'نامشخص',
+    'آدرس عکس': item.photo || ''
+  };
+}
+
 async function loadUsers() {
   try {
     const stored = localStorage.getItem(usersStorageKey);
@@ -24,10 +58,50 @@ async function saveUsers(users) {
   }
 }
 
+// Upload photo to imgbb
+async function uploadPhotoToImgBB(file) {
+  const API_KEY = 'fdd337daacb1c2d5196f43b23400a246';
+
+  const formData = new FormData();
+  formData.append('image', file);
+
+  try {
+    const response = await fetch(`https://api.imgbb.com/1/upload?key=${API_KEY}`, {
+      method: 'POST',
+      body: formData
+    });
+    const result = await response.json();
+    if (result.success && result.data && result.data.url) {
+      return result.data.url;
+    }
+    throw new Error('آپلود عکس ناموفق بود');
+  } catch (error) {
+    console.error('Error uploading photo:', error);
+    throw error;
+  }
+}
+
+// Temporary solution: save photo as base64 in localStorage
+async function savePhotoAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      // Limit size to avoid localStorage quota issues
+      if (e.target.result.length > 2000000) { // 2MB limit
+        reject(new Error('حجم عکس خیلی زیاد است. لطفاً عکسی با حجم کمتر انتخاب کنید.'));
+        return;
+      }
+      resolve(e.target.result);
+    };
+    reader.onerror = () => reject(new Error('خطا در خواندن فایل'));
+    reader.readAsDataURL(file);
+  });
+}
+
 function previewPhoto(input) {
   if (input.files && input.files[0]) {
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = function (e) {
       document.getElementById('preview-img').src = e.target.result;
       document.getElementById('photo-preview').classList.remove('hidden');
     };
@@ -42,8 +116,8 @@ async function updateProfile(event) {
   const newPassword = document.getElementById('profile-password').value;
   const photoInput = document.getElementById('profile-photo');
 
-  if (!fullName || !password) {
-    showToast('لطفاً همه فیلدها را پر کنید', '⚠️');
+  if (!fullName) {
+    showToast('لطفاً نام کامل را وارد کنید', '⚠️');
     return;
   }
 
@@ -54,12 +128,21 @@ async function updateProfile(event) {
 
   // آپدیت کاربر
   currentUser.fullName = fullName;
-  currentUser.password = password;
-  if (newPassword) currentUser.password = newPassword;
+  // فقط اگر رمز جدید وارد شده باشد، آپدیت شود
+  if (newPassword && newPassword.trim() !== '') {
+    currentUser.password = newPassword;
+  }
 
-  if (photoInput.files[0]) {
-    const photoBase64 = await readFileAsBase64(photoInput.files[0]);
-    currentUser.photo = photoBase64;
+  // ذخیره عکس اگر انتخاب شده باشد
+  if (photoInput.files && photoInput.files[0]) {
+    try {
+      showToast('در حال آپلود عکس...', '⏳');
+      const photoUrl = await uploadPhotoToImgBB(photoInput.files[0]);
+      currentUser.photo = photoUrl;
+    } catch (error) {
+      showToast('خطا در آپلود عکس: ' + error.message, '❌');
+      return;
+    }
   }
 
   // ذخیره در allUsers
@@ -67,10 +150,14 @@ async function updateProfile(event) {
   if (userIndex !== -1) allUsers[userIndex] = currentUser;
   await saveUsers(allUsers);
 
-  // آپدیت session (اینجا درست شد!)
+  // همگام‌سازی با Google Sheets (بدون عکس، فقط آپلود آدرس)
+  const gsData = mapUserToGS(currentUser);
+  await callGoogleSheets('update', 'accounts', gsData);
+
+  // آپدیت session
   let session = JSON.parse(localStorage.getItem('session') || '{}');
   session.fullName = fullName;
-  session.photo = currentUser.photo || '';  // ذخیره عکس در session
+  session.photo = currentUser.photo || '';
   localStorage.setItem('session', JSON.stringify(session));
 
   showToast('پروفایل با موفقیت به‌روزرسانی شد!', '✅');
@@ -81,9 +168,9 @@ async function updateProfile(event) {
 function readFileAsBase64(file) {
   return new Promise((resolve) => {
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = function (e) {
       const img = new Image();
-      img.onload = function() {
+      img.onload = function () {
         const canvas = document.createElement('canvas');
         const maxSize = 600;
         let width = img.width;
@@ -127,8 +214,11 @@ function logout() {
 }
 
 function updateDateTime() {
-  const now = new Date();
-  document.getElementById('current-date').textContent = now.toLocaleDateString('fa-IR');
+  const dateElement = document.getElementById('current-date');
+  if (dateElement) {
+    const now = new Date();
+    dateElement.textContent = now.toLocaleDateString('fa-IR');
+  }
 }
 
 async function initProfilePage() {
@@ -145,20 +235,29 @@ async function initProfilePage() {
   if (!currentUser) return navigateTo('./login.html');
 
   document.getElementById('profile-fullname').value = currentUser.fullName || '';
-  document.getElementById('profile-password').value = '';
+  // نمایش رمز عبور فعلی
+  document.getElementById('profile-password').value = currentUser.password || '';
 
-  if (currentUser.photo) {
-    document.getElementById('preview-img').src = currentUser.photo;
+  // Load photo from session first (most recent), then from currentUser
+  const photoUrl = session.photo || currentUser.photo;
+  if (photoUrl) {
+    document.getElementById('preview-img').src = photoUrl;
     document.getElementById('photo-preview').classList.remove('hidden');
   }
 
-  updateDateTime();
-  setInterval(updateDateTime, 60000);
+  // Make photo preview clickable
+  const photoPreview = document.getElementById('photo-preview');
+  const photoInput = document.getElementById('profile-photo');
+  if (photoPreview && photoInput) {
+    photoPreview.style.cursor = 'pointer';
+    photoPreview.title = 'برای تغییر عکس کلیک کنید';
+    photoPreview.addEventListener('click', () => {
+      photoInput.click();
+    });
+  }
+
+  // updateDateTime(); // Commented out as current-date element doesn't exist in HTML
+  // setInterval(updateDateTime, 60000);
 }
 
 document.addEventListener('DOMContentLoaded', initProfilePage);
-
-
-
-
-

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>نظریات تعمیرات - سیستم مدیریت موتور سکیل ها</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="stylesheet" href="./global.css">
+  <style>
+    .tab-active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    .status-filter-btn {
+      background: #374151;
+      color: #e5e7eb;
+    }
+    .status-filter-btn.active {
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      color: #fff;
+    }
+    .status-needs-repair { background-color: #ef4444; }
+    .status-cannot-repair { background-color: #f97316; }
+    .status-repaired { background-color: #22c55e; }
+    .pinned-item { border-right: 4px solid #fbbf24; }
+  </style>
+</head>
+<body class="h-screen bg-gray-950 text-white">
+
+<div id="loading-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.65); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; color: white; font-size: 1rem;">
+  <div class="motorbike-loader">
+    <div class="bike">
+      <img class="small-img" src="https://i.ibb.co/kgFcnCHj/emojis-com-a-motor-bike-rideng-emoji.png" alt="loader-bike">
+    </div>
+    <div class="smoke smoke1">💨</div>
+    <div class="smoke smoke2">🌫️</div>
+  </div>
+  <p style="margin: 10px 0 0; font-weight: bold; text-shadow: 0 0 10px rgba(255,255,255,0.5);">
+    در حال بارگذاری...
+  </p>
+</div>
+
+<div class="h-screen p-6">
+  <div class="card p-6 mb-6">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <div class="motorcycle-icon">🗣️</div>
+        <div>
+          <h1 class="text-3xl font-bold text-white">نظریات و پیشنهادات</h1>
+          <p class="text-gray-300 mt-1">پارکینگ ولایت کابل</p>
+        </div>
+      </div>
+      <div class="text-left">
+        <p class="text-sm text-gray-300">تاریخ</p>
+        <p id="current-date" class="text-lg font-bold text-white"></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex gap-4 mb-6">
+    <button id="tab-feedbacks" onclick="switchTab('feedbacks')" class="tab-active px-6 py-3 rounded-lg font-bold text-lg transition-all duration-300">
+      🗣️ نظریات
+    </button>
+    <button id="tab-suggestions" onclick="switchTab('suggestions')" class="bg-gray-700 px-6 py-3 rounded-lg font-bold text-lg transition-all duration-300 hover:bg-gray-600">
+      💡 پیشنهادات
+    </button>
+  </div>
+
+  <div class="card p-6">
+    <div class="flex items-center justify-between mb-6 gap-4 flex-wrap">
+      <div class="flex items-center gap-2 flex-wrap">
+        <button class="btn btn-secondary" onclick="navigateTo('./maintenance.html')">← بازگشت به تعمیرات</button>
+        <button id="status-filter-all" class="status-filter-btn active px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200" onclick="setStatusFilter('all')">همه</button>
+        <button id="status-filter-needs-repair" class="status-filter-btn px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200" onclick="setStatusFilter('نیاز به تعمیر دارد')">نیاز به تعمیر دارد</button>
+        <button id="status-filter-repaired" class="status-filter-btn px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200" onclick="setStatusFilter('تعمیر شد')">تعمیر شد</button>
+        <button id="status-filter-cannot-repair" class="status-filter-btn px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200" onclick="setStatusFilter('تعمیر نمیشود')">تعمیر نمیشود</button>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="item-count" class="text-gray-300 text-sm">0 مورد</span>
+      </div>
+    </div>
+
+    <div id="feedback-list" class="space-y-4 h-screen"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast">
+  <span id="toast-icon" class="text-2xl">✅</span>
+  <span id="toast-message" class="font-medium text-gray-800">پیام موفقیت</span>
+</div>
+
+<script src="./googleSheets.js"></script>
+<script src="./index.js"></script>
+<script src="./maintenance.js"></script>
+<script src="./maintenance-feedback.js"></script>
+</body>
+</html>

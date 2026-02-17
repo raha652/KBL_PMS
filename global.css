@@ -1,12 +1,165 @@
 @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Estedad:wght@300;400;500;600;700;800;900&display=swap');
 
+:root {
+  /* Light Theme Colors */
+  --bg-primary: #667eea;
+  --bg-secondary: #764ba2;
+  --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #667eea 50%, #764ba2 75%, #667eea 100%);
+  --card-bg: rgba(255, 255, 255, 0.15);
+  --card-border: rgba(255, 255, 255, 0.2);
+  --card-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --text-primary: #ffffff;
+  --text-secondary: #e0e0e0;
+  --text-muted: #b0b0b0;
+  --input-bg: #ffffff;
+  --input-border: #e5e7eb;
+  --input-text: #1f2937;
+  --modal-bg: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+  --modal-text: #ffffff;
+  --modal-input-bg: #ffffff;
+  --modal-input-text: #1f2937;
+  --btn-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --btn-success: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  --btn-danger: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+  --btn-secondary: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+  --status-pending: #fef3c7;
+  --status-pending-text: #92400e;
+  --status-active: #d1fae5;
+  --status-active-text: #065f46;
+  --status-completed: #dbeafe;
+  --status-completed-text: #1e40af;
+}
+
+[data-theme="dark"] {
+  /* Dark Theme Colors */
+  --bg-primary: #1e293b;
+  --bg-secondary: #334155;
+  --bg-gradient: linear-gradient(135deg, #1e293b 0%, #334155 50%, #1e293b 100%);
+  --card-bg: rgba(30, 41, 59, 0.8);
+  --card-border: rgba(255, 255, 255, 0.1);
+  --card-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --text-primary: #f1f5f9;
+  --text-secondary: #e2e8f0;
+  --text-muted: #94a3b8;
+  --input-bg: #334155;
+  --input-border: #475569;
+  --input-text: #f1f5f9;
+  --modal-bg: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  --modal-text: #f1f5f9;
+  --modal-input-bg: #334155;
+  --modal-input-text: #f1f5f9;
+  --btn-primary: linear-gradient(135deg, #4c1d95 0%, #6d28d9 100%);
+  --btn-success: linear-gradient(135deg, #065f46 0%, #059669 100%);
+  --btn-danger: linear-gradient(135deg, #991b1b 0%, #b91c1c 100%);
+  --btn-secondary: linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%);
+  --status-pending: #78350f;
+  --status-pending-text: #fcd34d;
+  --status-active: #064e3b;
+  --status-active-text: #6ee7b7;
+  --status-completed: #1e3a8a;
+  --status-completed-text: #93c5fd;
+}
+
 * {
   font-family: 'Vazirmatn', sans-serif;
 }
 
 body {
   box-sizing: border-box;
+  background: var(--bg-gradient);
+  transition: background 0.4s ease;
+}
+
+/* Apply CSS variables to existing styles */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+  color: var(--text-primary);
+}
+
+.stat-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  transition: transform 0.3s, box-shadow 0.3s;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  backdrop-filter: blur(20px);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Ensure 5 column layout works properly on all screen sizes */
+@media (max-width: 768px) {
+  .grid-cols-5 {
+    grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .grid-cols-5 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 1025px) {
+  .grid-cols-5 {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+}
+
+
+.btn-primary {
+  background: var(--btn-primary);
+}
+
+.btn-success {
+  background: var(--btn-success);
+}
+
+.btn-danger {
+  background: var(--btn-danger);
+}
+
+.btn-secondary {
+  background: var(--btn-secondary);
+}
+
+.input-field {
+  background: var(--input-bg);
+  border-color: var(--input-border);
+  color: var(--input-text);
+}
+
+.input-field:focus {
+  border-color: var(--bg-primary);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.modal-content {
+  background: var(--modal-bg);
+  color: var(--modal-text);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.status-pending {
+  background: var(--status-pending);
+  color: var(--status-pending-text);
+}
+
+.status-active {
+  background: var(--status-active);
+  color: var(--status-active-text);
+}
+
+.status-completed {
+  background: var(--status-completed);
+  color: var(--status-completed-text);
 }
 
 .card {
@@ -28,7 +181,6 @@ body {
   color: #ffffff;
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
-
 
 .card::before {
   content: '';
@@ -111,16 +263,21 @@ body {
 .input-field {
   width: 100%;
   padding: 12px 16px;
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--input-border);
   border-radius: 12px;
   font-size: 14px;
   transition: all 0.3s ease;
-  background: white;
+  background: var(--input-bg);
+  color: var(--input-text);
+}
+
+.input-field::placeholder {
+  color: var(--text-muted);
 }
 
 .input-field:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--bg-primary);
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
@@ -186,18 +343,6 @@ body {
 
 .modal-content {
   background: white;
-  border-radius: 20px;
-  padding: 32px;
-  max-width: 600px;
-  width: 90%;
-  max-height: 90%;
-  overflow-y: auto;
-  animation: slideUp 0.3s ease;
-}
-
-
-.modal-content34 {
-  background: rgb(31, 57, 56);
   border-radius: 20px;
   padding: 32px;
   max-width: 600px;
@@ -495,21 +640,10 @@ body {
   /* بنفش برای دپارتمان‌ها */
 }
 
-
 .active-filter {
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8) !important;
   transform: scale(1.05);
   border: 1px solid #ffffff;
-}
-
-.input-field {
-  width: 100%;
-  padding: 10px 14px;
-  border: 2px solid #e5e7eb;
-  border-radius: 10px;
-  font-size: 13px;
-  transition: all 0.3s ease;
-  background: white;
 }
 
 .motorbike-loader {

@@ -1,3 +1,10 @@
+const IDLE_TIMEOUT_SECONDS = 21600;
+const SYNC_INTERVAL_MS = 8000;
+const MAX_KILOMETERS = 1000000;
+const MIN_KILOMETERS = 0;
+const SEARCH_DEBOUNCE_MS = 300;
+
+
 const defaultConfig = {
   dashboard_title: 'سیستم مدیریت موتور سکیل ها',
   company_name: 'پارکینگ ولایت کابل',
@@ -38,10 +45,15 @@ let currentIntervalDisplay = 'هیچکدام';
 
 async function syncAllData() {
   try {
+    console.log('Starting full data sync...');
     await syncEmployeesWithGoogleSheets(allData);
+    console.log('Employees synced:', allData.filter(d => d.type === 'employee').length);
     await syncMotorcyclesWithGoogleSheets(allData);
+    console.log('Motorcycles synced:', allData.filter(d => d.type === 'motorcycle').length);
     await syncRequestsWithGoogleSheets(allData);
+    console.log('Requests synced:', allData.filter(d => d.type === 'request').length);
     await saveData(allData);
+    await syncFeedbackWithGoogleSheets(allData);
     dataHandler.onDataChanged(allData);
     console.log('Data synced successfully');
   } catch (error) {
@@ -138,7 +150,9 @@ async function loadUsers() {
         password: 'admin123',
         role: 'admin',
         position: 'Electrical ENG',
-        department: 'پاور'
+        department: 'پاور',
+        photo: 'https://i.ibb.co/bcmdRGx/photo-2025-11-07-17-46-35.jpg',
+        customDisplays: 'تعمیرات,اعلانات'
       };
       allUsers.push(defaultAdmin);
       await saveUsers();
@@ -240,7 +254,13 @@ function openEditAccountModal(userId, username, fullName, password, role, positi
   document.getElementById('edit-account-password').value = password;
   document.getElementById('edit-account-role').value = role;
   document.getElementById('edit-account-position').value = position;
-  document.getElementById('edit-account-department').value = department;
+  document.getElementById('edit-account-department').value = department;پ
+
+  const displays = customDisplays ? customDisplays.split(',') : [];
+  document.getElementById('edit-account-show-maintenance').checked = displays.includes('تعمیرات');
+  document.getElementById('edit-account-show-notifications').checked = displays.includes('اعلانات');
+
+
   document.getElementById('edit-account-form').dataset.userId = userId;
   document.getElementById('edit-account-modal').classList.add('active');
 }
@@ -253,11 +273,19 @@ async function submitEditAccount(event) {
   const role = document.getElementById('edit-account-role').value;
   const position = document.getElementById('edit-account-position').value.trim();
   const department = document.getElementById('edit-account-department').value.trim();
+
+
+  const showMaintenance = document.getElementById('edit-account-show-maintenance').checked;
+  const showNotifications = document.getElementById('edit-account-show-notifications').checked;
+  const customDisplays = [];
+  if (showMaintenance) customDisplays.push('تعمیرات');
+  if (showNotifications) customDisplays.push('اعلانات');
+
   if (!fullName || !username || !password || !role || !position || !department) {
     showToast('لطفاً همه فیلدها را پر کنید', '⚠️');
     return;
   }
-  const updatedData = { fullName, username, password, role, position, department };
+  const updatedData = { fullName, username, password, role, position, department, customDisplays: customDisplays.join(',') };
   const result = await updateUser(userId, updatedData);
   if (result.isOk) {
     showToast('اکانت با موفقیت به‌روزرسانی شد', '✅');
@@ -273,6 +301,17 @@ async function syncUsersWithGoogleSheets() {
       const gsUsers = result.data
         .map(mapGSToUser)
         .filter(user => user.__backendId);
+
+
+      const localUsers = [...allUsers];
+
+      for (let gsUser of gsUsers) {
+        const localUser = localUsers.find(u => u.username === gsUser.username);
+        if (localUser && localUser.customDisplays && !gsUser.customDisplays) {
+          gsUser.customDisplays = localUser.customDisplays;
+        }
+      }
+
       const defaultAdminExists = gsUsers.some(u => u.username === 'admin');
       if (!defaultAdminExists) {
         const defaultAdmin = {
@@ -282,10 +321,14 @@ async function syncUsersWithGoogleSheets() {
           password: 'admin123',
           role: 'admin',
           position: 'Electrical ENG',
-          department: 'پاور'
+          department: 'پاور',
+          photo: 'https://i.ibb.co/bcmdRGx/photo-2025-11-07-17-46-35.jpg',
+          customDisplays: 'تعمیرات,اعلانات' // Admin needs to explicitly enable maintenance
         };
         gsUsers.push(defaultAdmin);
       }
+      // Note: We don't force customDisplays on admin anymore
+      // Each user must have maintenance explicitly enabled in their account
       allUsers = gsUsers;
       await saveUsers(allUsers);
       return true;
@@ -425,10 +468,10 @@ function updateDepartments() {
   departments = uniqueDepartments.sort();
 }
 const passwords = {
-  request: '123',
   management: '456',
   motorcycle: 'motor123',
-  employee: 'staff456'
+  employee: 'staff456',
+  maintenance: '234'
 };
 const dataHandler = {
   onDataChanged(data) {
@@ -571,7 +614,79 @@ function updateCurrentPage() {
       break;
   }
 }
+async function setUserOnlineStatus(username, status) {
+  try {
+    const user = allUsers.find(u => u.username === username);
+    if (!user) return;
+
+    user.onlineStatus = status;
+    user.lastActivity = new Date().toISOString();
+
+    const userIndex = allUsers.findIndex(u => u.username === username);
+    if (userIndex !== -1) {
+      allUsers[userIndex] = user;
+      await saveUsers(allUsers);
+
+      // Sync with Google Sheets
+      const gsData = mapUserToGS(user);
+      await callGoogleSheets('update', 'accounts', gsData);
+      
+      // آپدیت وضعیت آنلاین در داشبورد
+      updateOnlineStatus();
+    }
+  } catch (error) {
+    console.error('Error setting online status:', error);
+  }
+}
+
+// بررسی و آپدیت وضعیت آنلاین کاربران (5 دقیقه عدم فعالیت = آفلاین)
+async function checkAndUpdateOnlineStatus() {
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  let updated = false;
+  
+  for (let i = 0; i < allUsers.length; i++) {
+    const user = allUsers[i];
+    if (user.onlineStatus === 'online' && user.lastActivity) {
+      const lastActivity = new Date(user.lastActivity);
+      if (lastActivity < fiveMinutesAgo) {
+        user.onlineStatus = 'offline';
+        updated = true;
+        
+        // آپدیت در Google Sheets
+        try {
+          const gsData = mapUserToGS(user);
+          await callGoogleSheets('update', 'accounts', gsData);
+        } catch (e) {
+          console.error('Error updating offline status:', e);
+        }
+      }
+    }
+  }
+  
+  if (updated) {
+    await saveUsers(allUsers);
+    updateOnlineStatus();
+  }
+}
+
+// آپدیت فعالیت کاربر فعلی
+function updateUserActivity() {
+  if (window.currentUser && window.currentUser.username) {
+    const user = allUsers.find(u => u.username === window.currentUser.username);
+    if (user) {
+      user.lastActivity = new Date().toISOString();
+      user.onlineStatus = 'online';
+      saveUsers(allUsers);
+    }
+  }
+}
+
 function logout() {
+  // Set user as offline
+  if (window.currentUser && window.currentUser.username) {
+    setUserOnlineStatus(window.currentUser.username, 'offline');
+  }
+
   if (window.idleInterval) {
     clearInterval(window.idleInterval);
     window.idleInterval = null;
@@ -602,11 +717,21 @@ function renderAccounts() {
     if (currentUserRole === 'admin') {
       actionButtons = `
         <div class="flex items-center gap-2">
-          <button class="btn btn-primary px-3 py-1 text-sm" onclick="openEditAccountModal('${user.__backendId}', '${user.username}', '${user.fullName}', '${user.password}', '${user.role}', '${user.position}', '${user.department || ''}')">✏️ ویرایش</button>
+          <button class="btn btn-primary px-3 py-1 text-sm" onclick="openEditAccountModal('${user.__backendId}', '${user.username}', '${user.fullName}', '${user.password}', '${user.role}', '${user.position}', '${user.department || ''}', '${user.customDisplays || ''}')">✏️ ویرایش</button>
           <button class="delete-btn" onclick="deleteUser('${user.__backendId}')">🗑️ حذف</button>
         </div>
       `;
     }
+    
+    // Display custom displays
+    let customDisplaysHtml = '';
+    if (user.customDisplays) {
+      const displays = user.customDisplays.split(',').filter(d => d);
+      if (displays.length > 0) {
+        customDisplaysHtml = `<p class="text-gray-200 mt-1">نمایش‌ها: ${displays.join('، ')}</p>`;
+      }
+    }
+    
     return `
       <div class="card p-6">
         <div class="flex items-center justify-between">
@@ -620,6 +745,7 @@ function renderAccounts() {
               <p class="text-gray-200 mt-1">نقش: ${user.role === 'admin' ? 'ادمین' : 'کاربر'}</p>
               <p class="text-gray-200 mt-1">موقعیت شغلی: ${user.position || 'نامشخص'}</p>
               <p class="text-gray-200 mt-1">دیپارتمنت: ${user.department || 'نامشخص'}</p>
+              ${customDisplaysHtml}
             </div>
           </div>
           ${actionButtons}
@@ -743,11 +869,19 @@ async function submitNewAccount(event) {
   const role = document.getElementById('account-role').value;
   const position = document.getElementById('account-position').value.trim();
   const department = document.getElementById('account-department').value.trim();
+  
+  // Get custom displays
+  const showMaintenance = document.getElementById('account-show-maintenance').checked;
+  const showNotifications = document.getElementById('account-show-notifications').checked;
+  const customDisplays = [];
+  if (showMaintenance) customDisplays.push('تعمیرات');
+  if (showNotifications) customDisplays.push('اعلانات');
+  
   if (!fullName || !username || !password || !role || !position || !department) {
     showToast('لطفاً همه فیلدها را پر کنید', '⚠️');
     return;
   }
-  const result = await createUser({ fullName, username, password, role, position, department });
+  const result = await createUser({ fullName, username, password, role, position, department, customDisplays: customDisplays.join(',') });
   if (result.isOk) {
     showToast('اکانت با موفقیت اضافه شد', '✅');
     closeModal('new-account-modal');
@@ -790,6 +924,9 @@ async function initApp() {
   currentUserRole = currentUser.role;
   session.fullName = currentUser.fullName;
   localStorage.setItem('session', JSON.stringify(session));
+
+  // Set user as online
+  await setUserOnlineStatus(currentUser.username, 'online');
   if (document.getElementById('current-user')) {
     document.getElementById('current-user').textContent = currentUser.fullName || "کاربر ناشناس";
   }
@@ -808,12 +945,15 @@ async function initApp() {
   if (newAccountBtn && currentUserRole !== 'admin') {
     newAccountBtn.classList.add('hidden');
   }
-  if (getCurrentPage() === 'management') {
+if (getCurrentPage() === 'management') {
     const accountsCard = document.querySelector('button[onclick*="accounts"], .card[onclick*="accounts"], div[onclick*="accounts"], [onclick*="accounts"]');
     if (accountsCard && currentUserRole !== 'admin') {
       accountsCard.classList.add('hidden');
     }
   }
+  
+  // Note: Maintenance card should always be visible
+  // Password requirement is handled in openPasswordModal function
   updateDateTime();
   setInterval(updateDateTime, 60000);
   hideLoading();
@@ -915,7 +1055,19 @@ async function initApp() {
     });
   }
   setupIdleLogout();
-  setInterval(syncAllData, 7000);
+  setInterval(syncAllData, SYNC_INTERVAL_MS); // Use named constant
+  
+  // بررسی وضعیت آنلاین هر 1 دقیقه
+  setInterval(checkAndUpdateOnlineStatus, 60000);
+  
+  // Load notification badge
+  loadNotificationBadge();
+  setInterval(loadNotificationBadge, 30000); // Update every 30 seconds
+  
+  // آپدیت فعالیت کاربر در هر حرکت ماوس یا کلیک
+  ['mousemove', 'keydown', 'click', 'scroll'].forEach(event => {
+    document.addEventListener(event, updateUserActivity, true);
+  });
 }
 function setupIdleLogout() {
   if (typeof window.idleTime === 'undefined') {
@@ -936,7 +1088,7 @@ function setupIdleLogout() {
   window.idleTime = 0;
   window.idleInterval = setInterval(() => {
     window.idleTime += 1;
-    if (window.idleTime >= 21600) {
+    if (window.idleTime >= IDLE_TIMEOUT_SECONDS) {
       showToast('به دلیل عدم فعالیت، شما لاگ‌اوت شدید', '⚠️');
       logout();
       clearInterval(window.idleInterval);
@@ -965,10 +1117,23 @@ function updateDashboard() {
   const requests = allData.filter(d => d.type === 'request');
   const activeRequests = requests.filter(r => r.status === 'pending' || r.status === 'active');
   const inUse = requests.filter(r => r.status === 'active');
+
+  console.log('Dashboard update:', {
+    motorcycles: motorcycles.length,
+    employees: employees.length,
+    requests: requests.length,
+    activeRequests: activeRequests.length,
+    inUse: inUse.length
+  });
+
   if (document.getElementById('total-motorcycles')) document.getElementById('total-motorcycles').textContent = motorcycles.length;
   if (document.getElementById('total-employees')) document.getElementById('total-employees').textContent = employees.length;
   if (document.getElementById('active-requests')) document.getElementById('active-requests').textContent = activeRequests.length;
   if (document.getElementById('in-use')) document.getElementById('in-use').textContent = inUse.length;
+
+  // Update online status
+  updateOnlineStatus();
+
   if (getCurrentPage() === 'dashboard') {
     renderRequests(requests);
     renderMotorcycles(motorcycles);
@@ -1044,7 +1209,19 @@ function renderMotorcycles(motorcycles) {
     container.innerHTML = '<div class="col-span-full text-center py-12 text-gray-300"><p class="text-lg">هیچ موتور سکیلی ثبت نشده است</p></div>';
     return;
   }
-  container.innerHTML = motorcycles.map(motorcycle => `
+  container.innerHTML = motorcycles.map(motorcycle => {
+    // Status badge with color coding
+    const status = motorcycle.motorcycleStatus || 'سالم';
+    let statusClass = '';
+    if (status === 'سالم') {
+      statusClass = 'bg-green-500';
+    } else if (status === 'مفقود') {
+      statusClass = 'bg-red-500';
+    } else if (status === 'خراب') {
+      statusClass = 'bg-red-500';
+    }
+
+    return `
     <div class="card p-6 cursor-pointer hover:shadow-2xl transition-all duration-300"
          onclick="showMotorcycleDetails('${motorcycle.__backendId}')">
       <div class="flex items-center gap-4 mb-4">
@@ -1059,9 +1236,14 @@ function renderMotorcycles(motorcycles) {
       </div>
       <div class="border-t border-gray-600 pt-4">
         <p class="text-sm text-gray-100">🔢 پلاک: ${motorcycle.motorcyclePlate}</p>
+        <div class="mt-2 flex items-center gap-2">
+          <span class="text-sm text-gray-100">وضعیت:</span>
+          <span class="px-3 py-1 rounded-full text-xs font-semibold text-white ${statusClass}">${status}</span>
+        </div>
       </div>
     </div>
-  `).join('');
+    `;
+  }).join('');
 }
 function showMotorcycleDetails(motorcycleId) {
   const motorcycle = allData.find(d => d.__backendId === motorcycleId);
@@ -1103,6 +1285,18 @@ function showMotorcycleDetails(motorcycleId) {
     `<div class="motorcycle-icon-large mb-4">🏍️</div>`;
   const licenseHtml = motorcycle.motorcycleLicense ? `<tr><td class="px-4 py-2 font-semibold">نمبر جواز سیر</td><td class="px-4 py-2">${motorcycle.motorcycleLicense}</td></tr>` : '';
   const gpsStatusHtml = motorcycle.motorcycleGpsStatus ? `<tr><td class="px-4 py-2 font-semibold">وضعیت جی پی اس</td><td class="px-4 py-2">${motorcycle.motorcycleGpsStatus}</td></tr>` : '';
+
+  // Status badge with color coding
+  const conditionStatus = motorcycle.motorcycleStatus || 'سالم';
+  let conditionClass = '';
+  if (conditionStatus === 'سالم') {
+    conditionClass = 'bg-green-100 text-green-800';
+  } else if (conditionStatus === 'مفقود') {
+    conditionClass = 'bg-red-100 text-red-800';
+  } else if (conditionStatus === 'خراب') {
+    conditionClass = 'bg-red-100 text-red-800';
+  }
+  const conditionHtml = `<tr><td class="px-4 py-2 font-semibold">وضعیت موتور سکیل</td><td class="px-4 py-2"><span class="px-3 py-1 rounded-full text-sm font-semibold ${conditionClass}">${conditionStatus}</span></td></tr>`;
   const documentsButton = motorcycle.motorcycleDocuments ? `<button class="btn btn-secondary text-xs py-1 px-2 ml-2" onclick="window.open('${motorcycle.motorcycleDocuments}', '_blank')">نمایش اسناد</button>` : '';
   const content = `
     <div class="flex flex-col items-center">
@@ -1119,6 +1313,7 @@ function showMotorcycleDetails(motorcycleId) {
             <tr><td class="px-4 py-2 font-semibold text-gray-300">شماره پلاک</td><td class="px-4 py-2 text-gray-200">${motorcycle.motorcyclePlate}</td></tr>
             ${licenseHtml}
             <tr><td class="px-4 py-2 font-semibold text-gray-300">نوعیت اسناد</td><td class="px-4 py-2 text-gray-200">${motorcycle.motorcycleDocumentType}</td></tr>
+            ${conditionHtml}
             <tr><td class="px-4 py-2 font-semibold text-gray-300">نمبر شاسی</td><td class="px-4 py-2 text-gray-200">${motorcycle.motorcycleChassisNumber}</td></tr>
             <tr><td class="px-4 py-2 font-semibold text-gray-300">نمبر انجین</td><td class="px-4 py-2 text-gray-200">${motorcycle.motorcycleEngineNumber}</td></tr>
             <tr><td class="px-4 py-2 font-semibold text-gray-300">جی پی اس</td><td class="px-4 py-2 text-gray-200">${motorcycle.motorcycleGps}</td></tr>
@@ -1306,7 +1501,23 @@ function renderMotorcycleStatus(motorcycles, requests) {
       </div>
       <div class="border-t border-gray-600 pt-4">
         <p class="text-sm text-gray-100 mb-2">🔢 پلاک: ${data.motorcycle.motorcyclePlate}</p>
-        ${data.employeeInfo ? `<p class="text-sm text-gray-100 mb-2">${data.employeeInfo}</p>` : ''}
+        
+        <!-- Condition Status (سالم/مفقود/خراب) with color coding -->
+        <div class="mt-2 flex items-center gap-2">
+          <span class="text-sm text-gray-100">وضعیت:</span>
+          ${(() => {
+      const conditionStatus = data.motorcycle.motorcycleStatus || 'سالم';
+      let statusClass = '';
+      if (conditionStatus === 'سالم') {
+        statusClass = 'bg-green-500';
+      } else if (conditionStatus === 'مفقود' || conditionStatus === 'خراب') {
+        statusClass = 'bg-red-500';
+      }
+      return `<span class="px-2 py-0.5 rounded-full text-xs font-semibold text-white ${statusClass}">${conditionStatus}</span>`;
+    })()}
+        </div>
+        
+        ${data.employeeInfo ? `<p class="text-sm text-gray-100 mb-2 mt-2">${data.employeeInfo}</p>` : ''}
         ${data.activeRequest && data.activeRequest.requestDate ? `<p class="text-xs text-gray-100">📅 ${data.activeRequest.requestDate}</p>` : ''}
         ${data.activeRequest && data.activeRequest.exitTime ? `<p class="text-xs text-gray-100">🚀 خروج: ${data.activeRequest.exitTime}</p>` : ''}
       </div>
@@ -1406,7 +1617,6 @@ function selectDepartment(department) {
   document.getElementById('department-dropdown').classList.add('hidden');
   filterByDepartment();
 }
-
 
 function filterByDepartment() {
   const selectedDepartment = document.getElementById('selected-department').value;
@@ -1609,13 +1819,24 @@ function populateMotorcycleDropdown() {
     return;
   }
 
-  optionsContainer.innerHTML = availableMotorcyclesForRequest.map(moto => `
-    <div class="p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
-         onclick="selectMotorcycle('${moto.__backendId}', '${moto.motorcycleName} - ${moto.motorcycleColor} - ${moto.motorcyclePlate} (${moto.motorcycleDepartment})')">
-      ${moto.motorcycleName} - ${moto.motorcycleColor} - ${moto.motorcyclePlate}
-      <span class="block text-xs text-gray-500">${moto.motorcycleDepartment}</span>
-    </div>
-  `).join('');
+  optionsContainer.innerHTML = availableMotorcyclesForRequest.map(moto => {
+    // Status badge with color coding
+    const status = moto.motorcycleStatus || 'سالم';
+    let statusClass = '';
+    if (status === 'سالم') {
+      statusClass = 'bg-green-500';
+    } else if (status === 'مفقود' || status === 'خراب') {
+      statusClass = 'bg-red-500';
+    }
+
+    return `<div class="p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0" onclick="selectMotorcycle('${moto.__backendId}', '${moto.motorcycleName} - ${moto.motorcycleColor} - ${moto.motorcycleDepartment}')">
+      <div class="font-semibold">${moto.motorcycleName} - ${moto.motorcycleColor} - ${moto.motorcycleDepartment}</div>
+      <div class="flex items-center gap-2 mt-1">
+        <span class="text-sm text-gray-600">وضعیت:</span>
+        <span class="px-2 py-0.5 rounded-full text-xs font-semibold text-white ${statusClass}">${status}</span>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 
@@ -1637,9 +1858,24 @@ function searchMotorcycles() {
     optionsContainer.innerHTML = '<div class="p-3 text-gray-500 text-center">هیچ موتور سکیل آزادی یافت نشد</div>';
     return;
   }
-  optionsContainer.innerHTML = filteredMotorcycles.map(moto =>
-    `<div class="p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0" onclick="selectMotorcycle('${moto.__backendId}', '${moto.motorcycleName} - ${moto.motorcycleColor} - ${moto.motorcycleDepartment}')">${moto.motorcycleName} - ${moto.motorcycleColor} - ${moto.motorcycleDepartment}</div>`
-  ).join('');
+  optionsContainer.innerHTML = filteredMotorcycles.map(moto => {
+    // Status badge with color coding
+    const status = moto.motorcycleStatus || 'سالم';
+    let statusClass = '';
+    if (status === 'سالم') {
+      statusClass = 'bg-green-500';
+    } else if (status === 'مفقود' || status === 'خراب') {
+      statusClass = 'bg-red-500';
+    }
+
+    return `<div class="p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0" onclick="selectMotorcycle('${moto.__backendId}', '${moto.motorcycleName} - ${moto.motorcycleColor} - ${moto.motorcycleDepartment}')">
+      <div class="font-semibold">${moto.motorcycleName} - ${moto.motorcycleColor} - ${moto.motorcycleDepartment}</div>
+      <div class="flex items-center gap-2 mt-1">
+        <span class="text-sm text-gray-600">وضعیت:</span>
+        <span class="px-2 py-0.5 rounded-full text-xs font-semibold text-white ${statusClass}">${status}</span>
+      </div>
+    </div>`;
+  }).join('');
 }
 function toggleMotorcycleDropdown() {
   if (document.getElementById('motorcycle-select').disabled) return;
@@ -1663,10 +1899,34 @@ function selectMotorcycle(motorcycleId, motorcycleText) {
   document.getElementById('motorcycle-dropdown').classList.add('hidden');
 }
 function openPasswordModal(type) {
+  // All users can create requests without password
+  if (type === 'request') {
+    openNewRequestModal();
+    return;
+  }
+
+  // Check if user has maintenance permission (customDisplays contains 'تعمیرات')
+  if (type === 'maintenance') {
+    const user = window.currentUser;
+    const displays = user && user.customDisplays ? user.customDisplays.split(',') : [];
+    const hasMaintenancePermission = displays.includes('تعمیرات');
+    
+    if (hasMaintenancePermission) {
+      // User has permission - no password needed
+      navigateTo('./maintenance.html');
+      return;
+    }
+    // User doesn't have permission - ask for password
+    currentPasswordType = type;
+    document.getElementById('password-message').textContent = '🔐 برای دسترسی به تعمیرات، رمز عبور را وارد کنید';
+    document.getElementById('password-modal').classList.add('active');
+    document.getElementById('password-input').focus();
+    return;
+  }
+
+  // For other types, admins can skip password
   if (currentUserRole === 'admin') {
-    if (type === 'request') {
-      openNewRequestModal();
-    } else if (type === 'management') {
+    if (type === 'management') {
       navigateTo('./management.html');
     } else if (type === 'motorcycle') {
       openNewMotorcycleModal();
@@ -1675,9 +1935,9 @@ function openPasswordModal(type) {
     }
     return;
   }
+
   currentPasswordType = type;
   const messages = {
-    request: '🔐 برای ایجاد درخواست جدید، رمز عبور را وارد کنید',
     management: '🔐 برای دسترسی به پنل مدیریت، رمز عبور را وارد کنید',
     motorcycle: '🔐 برای افزودن موتور سکیل، رمز عبور مدیریت موتور سکیل‌ها را وارد کنید',
     employee: '🔐 برای افزودن کارمند، رمز عبور مدیریت کارمندان را وارد کنید'
@@ -1693,14 +1953,15 @@ function verifyPassword(event) {
   if (enteredPassword === correctPassword) {
     closeModal('password-modal');
     document.getElementById('password-form').reset();
-    if (currentPasswordType === 'request') {
-      openNewRequestModal();
-    } else if (currentPasswordType === 'management') {
+
+    if (currentPasswordType === 'management') {
       navigateTo('./management.html');
     } else if (currentPasswordType === 'motorcycle') {
       openNewMotorcycleModal();
     } else if (currentPasswordType === 'employee') {
       openNewEmployeeModal();
+    } else if (currentPasswordType === 'maintenance') {
+      navigateTo('./maintenance.html');
     }
   } else {
     showToast('رمز عبور اشتباه است', '❌');
@@ -1714,6 +1975,10 @@ function openNewRequestModal() {
   updateModalSelects(employees, motorcycles);
   document.getElementById('new-request-modal').classList.add('active');
   populateDepartmentDropdown();
+}
+function closeNewRequestModal() {
+  closeModal('new-request-modal');
+  resetRequestForm();
 }
 function openNewMotorcycleModal() {
   toggleLicenseField();
@@ -1737,8 +2002,21 @@ function openEditMotorcycleModal(motorcycleId) {
   document.getElementById('edit-motorcycle-gps').value = motorcycle.motorcycleGps || '';
   document.getElementById('edit-motorcycle-gps-status').value = motorcycle.motorcycleGpsStatus || '';
   document.getElementById('edit-motorcycle-department').value = motorcycle.motorcycleDepartment;
-  document.getElementById('edit-motorcycle-photo').value = motorcycle.motorcyclePhoto || '';
-  document.getElementById('edit-motorcycle-documents').value = motorcycle.motorcycleDocuments || '';
+  document.getElementById('edit-motorcycle-status').value = motorcycle.motorcycleStatus || 'سالم';
+  // Don't set file input values - they can't be pre-filled programmatically
+  // If there are existing photos, show previews
+  if (motorcycle.motorcyclePhoto) {
+    document.getElementById('edit-motorcycle-photo-preview-img').src = motorcycle.motorcyclePhoto;
+    document.getElementById('edit-motorcycle-photo-preview').classList.remove('hidden');
+  } else {
+    document.getElementById('edit-motorcycle-photo-preview').classList.add('hidden');
+  }
+  if (motorcycle.motorcycleDocuments) {
+    document.getElementById('edit-motorcycle-documents-name').textContent = 'اسناد قبلی موجود است - فایل جدید برای جایگزینی انتخاب کنید';
+    document.getElementById('edit-motorcycle-documents-preview').classList.remove('hidden');
+  } else {
+    document.getElementById('edit-motorcycle-documents-preview').classList.add('hidden');
+  }
   document.getElementById('edit-motorcycle-form').dataset.id = motorcycleId;
   toggleEditLicenseField();
   toggleEditGpsStatusField();
@@ -1843,6 +2121,7 @@ async function submitNewRequest(event) {
     showToast('درخواست با موفقیت ثبت شد', '✅');
     closeModal('new-request-modal');
     resetRequestForm();
+    // No immediate sync needed - local data already has the request with correct motorcycleId
     updateCurrentPage();
   } else {
     showToast('خطا در ثبت درخواست', '❌');
@@ -1864,6 +2143,69 @@ function resetRequestForm() {
   document.getElementById('motorcycle-dropdown')?.classList.add('hidden');
 }
 
+// Upload photo to imgbb (same function as in profile-settings.js)
+async function uploadPhotoToImgBB(file) {
+  const API_KEY = 'fdd337daacb1c2d5196f43b23400a246';
+
+  const formData = new FormData();
+  formData.append('image', file);
+
+  try {
+    const response = await fetch(`https://api.imgbb.com/1/upload?key=${API_KEY}`, {
+      method: 'POST',
+      body: formData
+    });
+    const result = await response.json();
+    if (result.success && result.data && result.data.url) {
+      return result.data.url;
+    }
+    throw new Error('آپلود عکس ناموفق بود');
+  } catch (error) {
+    console.error('Error uploading photo:', error);
+    throw error;
+  }
+}
+
+// Preview motorcycle photo
+function previewMotorcyclePhoto(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      document.getElementById('motorcycle-photo-preview-img').src = e.target.result;
+      document.getElementById('motorcycle-photo-preview').classList.remove('hidden');
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+
+// Preview motorcycle documents
+function previewMotorcycleDocuments(input) {
+  if (input.files && input.files[0]) {
+    document.getElementById('motorcycle-documents-name').textContent = input.files[0].name;
+    document.getElementById('motorcycle-documents-preview').classList.remove('hidden');
+  }
+}
+
+// Preview edit motorcycle photo
+function previewEditMotorcyclePhoto(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      document.getElementById('edit-motorcycle-photo-preview-img').src = e.target.result;
+      document.getElementById('edit-motorcycle-photo-preview').classList.remove('hidden');
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+
+// Preview edit motorcycle documents
+function previewEditMotorcycleDocuments(input) {
+  if (input.files && input.files[0]) {
+    document.getElementById('edit-motorcycle-documents-name').textContent = input.files[0].name;
+    document.getElementById('edit-motorcycle-documents-preview').classList.remove('hidden');
+  }
+}
+
 async function submitNewMotorcycle(event) {
   event.preventDefault();
   if (currentRecordCount >= 100000000000) {
@@ -1876,7 +2218,35 @@ async function submitNewMotorcycle(event) {
   const licenseNumber = documentType === 'جواز سیر' ? document.getElementById('motorcycle-license').value : '';
   const gps = document.getElementById('motorcycle-gps').value;
   const gpsStatus = gps === 'دارد' ? document.getElementById('motorcycle-gps-status').value : '';
-  const documents = document.getElementById('motorcycle-documents').value || '';
+
+  // Upload photos and documents
+  let photoUrl = '';
+  let documentsUrl = '';
+  const photoInput = document.getElementById('motorcycle-photo');
+  const documentsInput = document.getElementById('motorcycle-documents');
+
+  if (photoInput.files && photoInput.files[0]) {
+    try {
+      showToast('در حال آپلود عکس...', '⏳');
+      photoUrl = await uploadPhotoToImgBB(photoInput.files[0]);
+    } catch (error) {
+      showToast('خطا در آپلود عکس: ' + error.message, '❌');
+      form.classList.remove('loading');
+      return;
+    }
+  }
+
+  if (documentsInput.files && documentsInput.files[0]) {
+    try {
+      showToast('در حال آپلود اسناد...', '⏳');
+      documentsUrl = await uploadPhotoToImgBB(documentsInput.files[0]);
+    } catch (error) {
+      showToast('خطا در آپلود اسناد: ' + error.message, '❌');
+      form.classList.remove('loading');
+      return;
+    }
+  }
+
   const motorcycleData = {
     type: 'motorcycle',
     motorcycleName: document.getElementById('motorcycle-name').value,
@@ -1890,8 +2260,9 @@ async function submitNewMotorcycle(event) {
     motorcycleGps: gps,
     motorcycleGpsStatus: gpsStatus,
     motorcycleDepartment: document.getElementById('motorcycle-department').value,
-    motorcyclePhoto: document.getElementById('motorcycle-photo').value || '',
-    motorcycleDocuments: documents,
+    motorcycleStatus: document.getElementById('motorcycle-status').value,
+    motorcyclePhoto: photoUrl,
+    motorcycleDocuments: documentsUrl,
     totalUsageTime: '00:00'
   };
   const result = await window.dataSdk.create(motorcycleData);
@@ -1902,6 +2273,9 @@ async function submitNewMotorcycle(event) {
     form.reset();
     toggleLicenseField();
     toggleGpsStatusField();
+    // Reset previews
+    document.getElementById('motorcycle-photo-preview').classList.add('hidden');
+    document.getElementById('motorcycle-documents-preview').classList.add('hidden');
   } else {
     showToast('خطا در افزودن موتور سکیل', '❌');
   }
@@ -1910,6 +2284,7 @@ async function submitNewMotorcycle(event) {
 async function submitEditMotorcycle(event) {
   event.preventDefault();
   const form = event.target;
+  form.classList.add('loading');
   const motorcycleId = form.dataset.id;
   const motorcycle = allData.find(d => d.__backendId === motorcycleId);
   if (!motorcycle) return;
@@ -1917,7 +2292,37 @@ async function submitEditMotorcycle(event) {
   const licenseNumber = documentType === 'جواز سیر' ? document.getElementById('edit-motorcycle-license').value : '';
   const gps = document.getElementById('edit-motorcycle-gps').value;
   const gpsStatus = gps === 'دارد' ? document.getElementById('edit-motorcycle-gps-status').value : '';
-  const documents = document.getElementById('edit-motorcycle-documents').value || motorcycle.motorcycleDocuments;
+
+  // Handle photo upload - keep existing photo unless a new file is selected
+  let photoUrl = motorcycle.motorcyclePhoto || '';
+  const photoInput = document.getElementById('edit-motorcycle-photo');
+
+  if (photoInput.files && photoInput.files[0]) {
+    try {
+      showToast('در حال آپلود عکس...', '⏳');
+      photoUrl = await uploadPhotoToImgBB(photoInput.files[0]);
+    } catch (error) {
+      showToast('خطا در آپلود عکس: ' + error.message, '❌');
+      form.classList.remove('loading');
+      return;
+    }
+  }
+
+  // Handle documents upload - keep existing documents unless a new file is selected
+  let documentsUrl = motorcycle.motorcycleDocuments || '';
+  const documentsInput = document.getElementById('edit-motorcycle-documents');
+
+  if (documentsInput.files && documentsInput.files[0]) {
+    try {
+      showToast('در حال آپلود اسناد...', '⏳');
+      documentsUrl = await uploadPhotoToImgBB(documentsInput.files[0]);
+    } catch (error) {
+      showToast('خطا در آپلود اسناد: ' + error.message, '❌');
+      form.classList.remove('loading');
+      return;
+    }
+  }
+
   const updatedMotorcycle = {
     ...motorcycle,
     motorcycleName: document.getElementById('edit-motorcycle-name').value,
@@ -1931,10 +2336,12 @@ async function submitEditMotorcycle(event) {
     motorcycleGps: gps,
     motorcycleGpsStatus: gpsStatus,
     motorcycleDepartment: document.getElementById('edit-motorcycle-department').value,
-    motorcyclePhoto: document.getElementById('edit-motorcycle-photo').value || '',
-    motorcycleDocuments: documents,
+    motorcycleStatus: document.getElementById('edit-motorcycle-status').value,
+    motorcyclePhoto: photoInput.files && photoInput.files[0] ? photoUrl : (motorcycle.motorcyclePhoto || ''),
+    motorcycleDocuments: documentsInput.files && documentsInput.files[0] ? documentsUrl : (motorcycle.motorcycleDocuments || ''),
     totalUsageTime: motorcycle.totalUsageTime || '00:00'
   };
+  form.classList.remove('loading');
   const result = await window.dataSdk.update(updatedMotorcycle);
   if (result.isOk) {
     showToast('موتور سکیل با موفقیت ویرایش شد', '✅');
@@ -2150,6 +2557,8 @@ async function deleteMotorcycle(motorcycleId) {
   }
   const result = await window.dataSdk.delete(motorcycle);
   if (result.isOk) {
+
+    await syncMotorcyclesWithGoogleSheets(allData);
     showToast('موتور سکیل با موفقیت حذف شد', '✅');
     updateCurrentPage();
   } else {
@@ -2225,34 +2634,34 @@ document.addEventListener('click', function (event) {
   const departmentSelect = document.getElementById('department-select');
   const employeeSelect = document.getElementById('employee-select');
   const motorcycleSelect = document.getElementById('motorcycle-select');
-  if (departmentDropdown && !departmentSelect.contains(event.target) && !departmentDropdown.contains(event.target)) {
+  if (departmentDropdown && departmentSelect && !departmentSelect.contains(event.target) && !departmentDropdown.contains(event.target)) {
     departmentDropdown.classList.add('hidden');
   }
-  if (employeeDropdown && !employeeSelect.contains(event.target) && !employeeDropdown.contains(event.target)) {
+  if (employeeDropdown && employeeSelect && !employeeSelect.contains(event.target) && !employeeDropdown.contains(event.target)) {
     employeeDropdown.classList.add('hidden');
   }
-  if (motorcycleDropdown && !motorcycleSelect.contains(event.target) && !motorcycleDropdown.contains(event.target)) {
+  if (motorcycleDropdown && motorcycleSelect && !motorcycleSelect.contains(event.target) && !motorcycleDropdown.contains(event.target)) {
     motorcycleDropdown.classList.add('hidden');
   }
   const userDropdown = document.getElementById('user-dropdown');
   const userIcon = document.getElementById('user-profile-icon');
-  if (userDropdown && !userIcon.contains(event.target) && !userDropdown.contains(event.target)) {
+  if (userDropdown && userIcon && !userIcon.contains(event.target) && !userDropdown.contains(event.target)) {
     userDropdown.classList.add('hidden');
   }
   const sortButton = document.getElementById('sort-button');
   const sortDropdown = document.getElementById('sort-dropdown');
-  if (sortDropdown && !sortButton.contains(event.target) && !sortDropdown.contains(event.target)) {
+  if (sortDropdown && sortButton && !sortButton.contains(event.target) && !sortDropdown.contains(event.target)) {
     sortDropdown.classList.add('hidden');
   }
   const deptButton = document.getElementById('dept-button');
   const deptDropdown = document.getElementById('dept-dropdown');
-  if (deptDropdown && !deptButton.contains(event.target) && !deptDropdown.contains(event.target)) {
+  if (deptDropdown && deptButton && !deptButton.contains(event.target) && !deptDropdown.contains(event.target)) {
     deptDropdown.classList.add('hidden');
   }
 
   const intervalButton = document.getElementById('interval-button');
   const intervalDropdown = document.getElementById('interval-dropdown');
-  if (intervalDropdown && !intervalButton.contains(event.target) && !intervalDropdown.contains(event.target)) {
+  if (intervalDropdown && intervalButton && !intervalButton.contains(event.target) && !intervalDropdown.contains(event.target)) {
     intervalDropdown.classList.add('hidden');
   }
 
@@ -2363,15 +2772,31 @@ async function submitFuelReport(event) {
   const fuelType = document.getElementById('fuel-type').value.trim();
   const fuelAmount = document.getElementById('fuel-amount').value.trim();
   const kilometerAmount = parseFloat(document.getElementById('kilometer-amount').value.trim());
-  if (!fuelType || !fuelAmount || isNaN(kilometerAmount)) {
+  const fuelAdditionDateInput = document.getElementById('fuel-addition-date').value.trim();
+  
+  if (!fuelType || !fuelAmount || isNaN(kilometerAmount) || !fuelAdditionDateInput) {
     showToast('لطفاً همه فیلدها را پر کنید', 'Warning');
     return;
   }
+  if (kilometerAmount < MIN_KILOMETERS || kilometerAmount > MAX_KILOMETERS) {
+    showToast(`میزان کیلومتر باید بین ${MIN_KILOMETERS.toLocaleString()} تا ${MAX_KILOMETERS.toLocaleString()} باشد`, '⚠️');
+    return;
+  }
+  
+  // Parse the fuel addition date (it's in YYYY-MM-DD format from date input)
+  const fuelAdditionDate = new Date(fuelAdditionDateInput);
+  const year = fuelAdditionDate.getFullYear();
+  const month = String(fuelAdditionDate.getMonth() + 1).padStart(2, '0');
+  const day = String(fuelAdditionDate.getDate()).padStart(2, '0');
+  const formattedFuelAdditionDate = `${year}/${month}/${day}`;
+  
+  // Get current date for automatic "تاریخ" field
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const reportDate = `${year}/${month}/${day}`;
+  const currentYear = now.getFullYear();
+  const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+  const currentDay = String(now.getDate()).padStart(2, '0');
+  const currentDate = `${currentYear}/${currentMonth}/${currentDay}`;
+  
   const previousReports = fuelReports.filter(report =>
     report.motorcycleName === selectedMotorcycleForFuel.motorcycleName &&
     report.motorcycleDepartment === selectedMotorcycleForFuel.motorcycleDepartment
@@ -2387,7 +2812,8 @@ async function submitFuelReport(event) {
     fuelType: fuelType,
     fuelAmount: fuelAmount,
     kilometerAmount: kilometerAmount,
-    reportDate: reportDate,
+    reportDate: currentDate, // Automatic date when record is added
+    fuelAdditionDate: formattedFuelAdditionDate, // User selected date
     reporterFullName: reporterFullName,
     totalDistance: 0
   };
@@ -2518,6 +2944,7 @@ function renderFuelReportsList() {
   }
 }
 
+
 function searchUsage() {
   const searchInput = document.getElementById('usage-search');
   if (searchInput) {
@@ -2544,7 +2971,165 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   renderMotorcyclesForFuel();
 });
-document.addEventListener('DOMContentLoaded', initApp);
+// Theme Toggle Function
+function toggleTheme() {
+  const body = document.body;
+  const themeIcon = document.getElementById('theme-icon');
+  const currentTheme = body.getAttribute('data-theme');
+
+  if (currentTheme === 'dark') {
+    body.removeAttribute('data-theme');
+    themeIcon.textContent = '☀️';
+    localStorage.setItem('theme', 'light');
+  } else {
+    body.setAttribute('data-theme', 'dark');
+    themeIcon.textContent = '🌙';
+    localStorage.setItem('theme', 'dark');
+  }
+}
+
+// Load saved theme on page load
+function loadTheme() {
+  const savedTheme = localStorage.getItem('theme') || 'light';
+  const body = document.body;
+  const themeIcon = document.getElementById('theme-icon');
+
+  // Apply theme to body regardless of whether theme icon exists
+  if (savedTheme === 'dark') {
+    body.setAttribute('data-theme', 'dark');
+    if (themeIcon) themeIcon.textContent = '🌙';
+  } else {
+    body.removeAttribute('data-theme');
+    if (themeIcon) themeIcon.textContent = '☀️';
+  }
+
+  // Force a reflow to ensure theme applies
+  void body.offsetHeight;
+}
+
+// Keyboard Shortcuts
+window.addEventListener('keydown', function (event) {
+  // Escape - Close all modals
+  if (event.key === 'Escape') {
+    document.querySelectorAll('.modal.active').forEach(modal => {
+      modal.classList.remove('active');
+    });
+  }
+
+  // Ctrl + K - Search focus
+  if (event.ctrlKey && (event.key === 'k' || event.key === 'K')) {
+    event.preventDefault();
+    const searchInput = document.querySelector('input[type="text"]:not([type="password"])') ||
+      document.querySelector('#department-search') ||
+      document.querySelector('#employee-search') ||
+      document.querySelector('#motorcycle-search');
+    if (searchInput) {
+      searchInput.focus();
+      showToast('فوکوس روی جستجو', '🔍');
+    }
+  }
+
+  // Ctrl + N - New request
+  if (event.ctrlKey && (event.key === 'n' || event.key === 'N')) {
+    event.preventDefault();
+    if (typeof openNewRequestModal === 'function') {
+      openPasswordModal('request');
+    } else {
+      showToast('صفحه درخواستی‌ها نیست', '⚠️');
+    }
+  }
+
+  // Ctrl + L - Logout
+  if (event.ctrlKey && (event.key === 'l' || event.key === 'L')) {
+    event.preventDefault();
+    if (confirm('آیا می‌خواهید خارج شوید؟')) {
+      logout();
+    }
+  }
+
+  // Ctrl + / - Show shortcuts help (Shift + / gives ? on keyboard)
+  if (event.ctrlKey && (event.key === '?' || event.key === '/')) {
+    event.preventDefault();
+    showShortcutsModal();
+  }
+});
+
+// Show Shortcuts Modal
+function showShortcutsModal() {
+  const shortcutsHtml = `
+    <div class="modal active" style="display: flex;">
+      <div class="modal-content">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6">⌨️ شورت‌کات‌ها</h2>
+        <div class="space-y-3">
+          <div class="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+            <kbd class="px-3 py-1 bg-gray-200 rounded text-sm font-mono">Ctrl</kbd> + <kbd class="px-3 py-1 bg-gray-200 rounded text-sm font-mono">K</kbd>
+            <span>جستجو</span>
+          </div>
+          <div class="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+            <kbd class="px-3 py-1 bg-gray-200 rounded text-sm font-mono">Ctrl</kbd> + <kbd class="px-3 py-1 bg-gray-200 rounded text-sm font-mono">N</kbd>
+            <span>درخواست جدید</span>
+          </div>
+          <div class="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+            <kbd class="px-3 py-1 bg-gray-200 rounded text-sm font-mono">Escape</kbd>
+            <span>بستن مودال‌ها</span>
+          </div>
+          <div class="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+            <kbd class="px-3 py-1 bg-gray-200 rounded text-sm font-mono">Ctrl</kbd> + <kbd class="px-3 py-1 bg-gray-200 rounded text-sm font-mono">L</kbd>
+            <span>خروج</span>
+          </div>
+          <div class="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+            <kbd class="px-3 py-1 bg-gray-200 rounded text-sm font-mono">Ctrl</kbd> + <kbd class="px-3 py-1 bg-gray-200 rounded text-sm font-mono">?</kbd>
+            <span>راهنما</span>
+          </div>
+        </div>
+        <div class="flex gap-3 mt-6">
+          <button type="button" class="btn btn-secondary flex-1" onclick="document.querySelector('.modal.active')?.remove()">بستن</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', shortcutsHtml);
+}
+
+// Update Online Status - counts users with onlineStatus = 'online' in accounts
+function updateOnlineStatus() {
+  const onlineUsers = allUsers.filter(u => u.onlineStatus === 'online').length;
+
+  // Find or create online status card
+  let onlineStatusCard = document.getElementById('online-status-card');
+  if (!onlineStatusCard) {
+    const statsSection = document.getElementById('stats-section');
+    if (statsSection) {
+      const cardHtml = `
+        <div class="stat-card" id="online-status-card">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm opacity-90">🟢 آنلاین</span>
+            <span class="text-2xl">👥</span>
+          </div>
+          <p id="online-users" class="text-3xl font-bold">${onlineUsers}</p>
+        </div>
+      `;
+      statsSection.insertAdjacentHTML('beforeend', cardHtml);
+      onlineStatusCard = document.getElementById('online-status-card');
+    }
+  } else {
+    const onlineUsersElement = document.getElementById('online-users');
+    if (onlineUsersElement) {
+      onlineUsersElement.textContent = onlineUsers;
+    }
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Load theme on all pages
+  loadTheme();
+
+  // Only init app if we're on a page that requires authentication
+  if (!window.location.pathname.includes('login.html') &&
+    !window.location.pathname.includes('signup.html')) {
+    initApp();
+  }
+});
 function filterRequests(filter) {
   currentRequestFilter = filter;
   document.querySelectorAll('[id^="filter-request-"]').forEach(btn => btn.classList.remove('active-filter'));
@@ -2653,13 +3238,53 @@ async function syncMotorcyclesWithGoogleSheets(allDataRef) {
         }
       });
       allDataRef.length = 0;
-      allDataRef.push(...nonMotorcycleData, ...Array.from(motorsMap.values()));
+      allDataRef.push(...nonMotorcycleData, ...gsMotorcycles);
       await saveData(allDataRef);
       return true;
     }
     return false;
   } catch (error) {
     console.error('Error syncing motorcycles:', error);
+    return false;
+  }
+}
+
+async function syncRequestsWithGoogleSheets(allDataRef) {
+  try {
+    const result = await callGoogleSheets('readAll', 'request');
+    if (result.success) {
+      // ONLY use Google Sheets data - ignore local data completely
+      let gsRequests = result.data
+        .map(mapGSToRequest)
+        .filter(request => request.__backendId);
+
+      // Match requests to motorcycles by name, color, plate, and department
+      // to set motorcycleId for status calculation
+      const motorcycles = allDataRef.filter(d => d.type === 'motorcycle');
+      for (let req of gsRequests) {
+        const matchingMotor = motorcycles.find(m =>
+          m.motorcycleName === req.motorcycleName &&
+          m.motorcycleColor === req.motorcycleColor &&
+          m.motorcyclePlate === req.motorcyclePlate &&
+          m.motorcycleDepartment === req.motorcycleDepartment
+        );
+        if (matchingMotor) {
+          req.motorcycleId = matchingMotor.__backendId;
+        } else {
+          console.warn('No matching motorcycle found for request:', req);
+        }
+      }
+
+      // Keep only non-request data, replace all requests with Google Sheets data
+      const nonRequestData = allDataRef.filter(d => d.type !== 'request');
+      allDataRef.length = 0;
+      allDataRef.push(...nonRequestData, ...gsRequests);
+      await saveData(allDataRef);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Error syncing requests:', error);
     return false;
   }
 }
@@ -2938,4 +3563,63 @@ function selectEditAssignedMotorcycle(id, text) {
   document.getElementById('edit-assigned-motorcycle-display').textContent = text || 'موتور سیکل اختصاصی انتخاب نشده';
   document.getElementById('edit-selected-assigned-motorcycle').value = id || '';
   document.getElementById('edit-assigned-motorcycle-dropdown').classList.add('hidden');
+}
+
+// Get read notifications from localStorage
+function getReadNotifications() {
+  try {
+    const read = localStorage.getItem('readNotifications');
+    return read ? JSON.parse(read) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// Mark a notification as read
+function markNotificationAsRead(notificationId) {
+  const read = getReadNotifications();
+  if (!read.includes(notificationId)) {
+    read.push(notificationId);
+    localStorage.setItem('readNotifications', JSON.stringify(read));
+  }
+}
+
+// Mark all notifications as read
+function markAllNotificationsAsRead(notificationIds) {
+  const read = getReadNotifications();
+  notificationIds.forEach(id => {
+    if (!read.includes(id)) {
+      read.push(id);
+    }
+  });
+  localStorage.setItem('readNotifications', JSON.stringify(read));
+}
+
+// Load notification badge count (only unread)
+async function loadNotificationBadge() {
+  try {
+    const result = await callGoogleSheets('readAll', 'alarm');
+    if (result.success && result.data) {
+      const allNotifications = result.data.filter(n => n['Unique ID'] || n.__backendId);
+      const readNotifications = getReadNotifications();
+      
+      // Count only unread notifications
+      const unreadCount = allNotifications.filter(n => {
+        const id = n['Unique ID'] || n.__backendId;
+        return !readNotifications.includes(id);
+      }).length;
+      
+      const badge = document.getElementById('notification-badge');
+      if (badge) {
+        if (unreadCount > 0) {
+          badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+          badge.classList.remove('hidden');
+        } else {
+          badge.classList.add('hidden');
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error loading notification badge:', error);
+  }
 }

@@ -79,7 +79,8 @@ function mapMotorcycleToGS(item) {
     'دیپارتمنت': item.motorcycleDepartment,
     'URL عکس': item.motorcyclePhoto || '',
     'URL اسناد': item.motorcycleDocuments || '',
-    'مجموعه استفاده': item.totalUsageTime || '00:00'
+    'مجموعه استفاده': item.totalUsageTime || '00:00',
+    'وضعیت موتور سکیل': item.motorcycleStatus || 'سالم'
 
   };
 }
@@ -100,7 +101,8 @@ function mapGSToMotorcycle(record) {
     motorcycleDepartment: record['دیپارتمنت'],
     motorcyclePhoto: record['URL عکس'] || '',
     motorcycleDocuments: record['URL اسناد'] || '',
-    totalUsageTime: record['مجموعه استفاده'] || '00:00'
+    totalUsageTime: record['مجموعه استفاده'] || '00:00',
+    motorcycleStatus: record['وضعیت موتور سکیل'] || 'سالم'
 
   };
 }
@@ -242,7 +244,11 @@ function mapUserToGS(item) {
     'رمز عبور': item.password,
     'نقش': item.role,
     'موقعیت شغلی': item.position || 'نامشخص',
-    'دیپارتمنت': item.department || 'نامشخص'
+    'دیپارتمنت': item.department || 'نامشخص',
+    'آدرس عکس': item.photo || '',
+    'وضعیت آنلاین': item.onlineStatus || 'offline',
+    'آخرین فعالیت': formatDateTimeReadable(item.lastActivity),
+    'نمایش‌های سفارشی': item.customDisplays || ''
   };
 }
 
@@ -254,7 +260,11 @@ function mapGSToUser(record) {
     password: record['رمز عبور'],
     role: record['نقش'],
     position: record['موقعیت شغلی'] || 'نامشخص',
-    department: record['دیپارتمنت'] || 'نامشخص' 
+    department: record['دیپارتمنت'] || 'نامشخص',
+    photo: record['آدرس عکس'] || '',
+    onlineStatus: record['وضعیت آنلاین'] || 'offline',
+    lastActivity: record['آخرین فعالیت'] || '',
+    customDisplays: record['نمایش‌های سفارشی'] || ''
   };
 }
 
@@ -272,7 +282,9 @@ function mapFuelToGS(item) {
     'میزان تیل': item.fuelAmount || '',
     'میزان کیلومتر': item.kilometerAmount || '',
     'نام کارمند': item.reporterFullName || '',
-    'میزان طی مسیر': item.totalDistance || 0
+    'میزان طی مسیر': item.totalDistance || 0,
+    'تاریخ اضافه کردن تیل': item.fuelAdditionDate || '' // User selected date
+
   };
 }
 
@@ -289,7 +301,9 @@ function mapGSToFuel(record) {
     fuelAmount: record['میزان تیل'],
     kilometerAmount: record['میزان کیلومتر'],
     reporterFullName: record['نام کارمند'] || '',
-    totalDistance: record['میزان طی مسیر'] || 0
+    totalDistance: record['میزان طی مسیر'] || 0,
+    fuelAdditionDate: record['تاریخ اضافه کردن تیل'] || ''
+
   };
 }
 
@@ -309,7 +323,236 @@ async function syncFuelReports() {
   }
 }
 
+// Helper function to format time for Google Sheets (HH:MM:SS)
+function formatTimeForGS(dateValue) {
+  let date;
+  if (typeof dateValue === 'string') {
+    // If already in HH:MM:SS format, return as is
+    if (/^\d{2}:\d{2}(:\d{2})?$/.test(dateValue.trim())) {
+      return dateValue.trim();
+    }
+    date = new Date(dateValue);
+  } else if (dateValue instanceof Date) {
+    date = dateValue;
+  } else {
+    date = new Date();
+  }
+  
+  if (isNaN(date.getTime())) {
+    date = new Date();
+  }
+  
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  
+  return `${hours}:${minutes}:${seconds}`;
+}
 
+// Helper function to format date for Google Sheets (YYYY/MM/DD)
+function formatDateForGS(dateValue) {
+  let date;
+  if (typeof dateValue === 'string') {
+    // If already in YYYY/MM/DD format, return as is
+    if (/^\d{4}[\/]\d{2}[\/]\d{2}$/.test(dateValue.trim())) {
+      return dateValue.trim();
+    }
+    date = new Date(dateValue);
+  } else if (dateValue instanceof Date) {
+    date = dateValue;
+  } else {
+    date = new Date();
+  }
+  
+  if (isNaN(date.getTime())) {
+    date = new Date();
+  }
+  
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  
+  return `${year}/${month}/${day}`;
+}
+
+function mapFeedbackToGS(item) {
+  const backendId = item.__backendId || (typeof generateId === 'function'
+    ? generateId()
+    : `fb-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
+
+  return {
+    'Unique ID':       backendId,
+    'نوع گزارش':      item.reportType,          // "نظریه" یا "پیشنهاد"
+    'نام کامل':       item.fullName,
+    'دیپارتمنت':     item.department,
+    'موتور سکیل':    item.motorcycle || '',     // فقط برای نظریه
+    'رنگ موتور سکیل': item.motorcycleColor || '',     // رنگ موتور سکیل
+    'دیپارتمنت موتور سکیل': item.motorcycleDepartment || '', // دیپارتمنت موتور سکیل
+    'متن':            item.content,
+    'تاریخ':          item.date || '',           // تاریخ ثبت - بدون تغییر
+    'زمان ثبت':       item.timestamp || '',     // زمان ثبت - بدون تغییر
+    'وضعیت تعمیر':    item.repairStatus || 'نیاز به تعمیر دارد',  // وضعیت تعمیر
+    'تاریخ تعمیر':    item.repairDate || '',    // تاریخ تعمیر
+    'شخص تعمیر کننده': item.repairedBy || '',   // نام شخصی که تعمیر را انجام داده
+    'پین شده':        item.pinned ? 'بله' : 'خیر'  // آیا پین شده
+  };
+}
+
+function mapGSToFeedback(record) {
+  return {
+    type:          'feedback',
+    __backendId:   record['Unique ID'],
+    reportType:    record['نوع گزارش'],
+    fullName:      record['نام کامل'],
+    department:    record['دیپارتمنت'],
+    motorcycle:    record['موتور سکیل'] || '',
+    motorcycleColor: record['رنگ موتور سکیل'] || '',
+    motorcycleDepartment: record['دیپارتمنت موتور سکیل'] || '',
+    content:       record['متن'],
+    date:          record['تاریخ'],
+    timestamp:     record['زمان ثبت'],
+    repairStatus:  record['وضعیت تعمیر'] || 'نیاز به تعمیر دارد',
+    repairDate:    record['تاریخ تعمیر'] || '',
+    repairedBy:    record['شخص تعمیر کننده'] || '',
+    pinned:        record['پین شده'] === 'بله'
+  };
+}
+
+async function syncFeedbackWithGoogleSheets(allDataRef) {
+  try {
+    const result = await callGoogleSheets('readAll', 'feedback');
+    if (result.success) {
+      const gsFeedback = result.data.map(mapGSToFeedback);
+
+      // فقط feedbackها را جایگزین می‌کنیم
+      const nonFeedbackData = allDataRef.filter(d => d.type !== 'feedback');
+      allDataRef.length = 0;
+      allDataRef.push(...nonFeedbackData, ...gsFeedback);
+
+      await saveData(allDataRef);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('خطا در همگام‌سازی feedback:', error);
+    return false;
+  }
+}
+
+// توابع مربوط به گزارشات موبلایل (oil)
+function mapOilToGS(item) {
+  const backendId = item.__backendId || (typeof generateId === 'function'
+    ? generateId()
+    : `oil-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
+
+  return {
+    'Unique ID': backendId,
+    'Motorcycle ID': item.motorcycleId || '',
+    'نام موتور سکیل': item.motorcycleName || '',
+    'رنگ موتور سکیل': item.motorcycleColor || '',
+    'دیپارتمنت موتور سکیل': item.motorcycleDepartment || '',
+    'پلاک موتور سکیل': item.motorcyclePlate || '',
+    'مقدار موبلایل': item.oilAmount || 0,
+    'نام کامل': item.reporterName || '',
+    'دیپارتمنت کاربر': item.reporterDept || '',
+    'تاریخ': item.date || '',
+    'زمان': item.time || ''
+  };
+}
+
+function mapGSToOil(record) {
+  return {
+    __backendId: record['Unique ID'],
+    motorcycleId: record['Motorcycle ID'] || '',
+    motorcycleName: record['نام موتور سکیل'] || '',
+    motorcycleColor: record['رنگ موتور سکیل'] || '',
+    motorcycleDepartment: record['دیپارتمنت موتور سکیل'] || '',
+    motorcyclePlate: record['پلاک موتور سکیل'] || '',
+    oilAmount: parseFloat(record['مقدار موبلایل']) || 0,
+    reporterName: record['نام کامل'] || '',
+    reporterDept: record['دیپارتمنت کاربر'] || '',
+    date: record['تاریخ'] || '',
+    time: record['زمان'] || ''
+  };
+}
+
+async function syncOilReports() {
+  try {
+    const result = await callGoogleSheets('readAll', 'oil');
+    if (result.success) {
+      return result.data.map(mapGSToOil).filter(r => r.__backendId);
+    }
+    return [];
+  } catch (error) {
+    console.error('Error syncing oil reports:', error);
+    return [];
+  }
+}
+
+// تابع تبدیل تاریخ به فرمت خوانا
+function formatDateTimeReadable(dateValue) {
+  let date;
+  if (typeof dateValue === 'string') {
+    date = new Date(dateValue);
+  } else if (dateValue instanceof Date) {
+    date = dateValue;
+  } else {
+    date = new Date();
+  }
+  
+  if (isNaN(date.getTime())) {
+    date = new Date();
+  }
+  
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  
+  return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
+}
+
+// توابع مربوط به اعلانات (alarm)
+function mapAlarmToGS(item) {
+  const backendId = item.__backendId || (typeof generateId === 'function'
+    ? generateId()
+    : `alarm-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
+
+  return {
+    'Unique ID': backendId,
+    'عنوان': item.title || '',
+    'متن': item.message || '',
+    'نام کامل': item.authorName || '',
+    'دیپارتمنت': item.authorDepartment || '',
+    'تاریخ': formatDateTimeReadable(item.createdAt)
+  };
+}
+
+function mapGSToAlarm(record) {
+  return {
+    __backendId: record['Unique ID'],
+    title: record['عنوان'] || '',
+    message: record['متن'] || '',
+    authorName: record['نام کامل'] || '',
+    authorDepartment: record['دیپارتمنت'] || '',
+    createdAt: record['تاریخ'] || new Date().toISOString()
+  };
+}
+
+async function syncAlarmsWithGoogleSheets() {
+  try {
+    const result = await callGoogleSheets('readAll', 'alarm');
+    if (result.success) {
+      return result.data.map(mapGSToAlarm).filter(n => n.__backendId);
+    }
+    return [];
+  } catch (error) {
+    console.error('Error syncing alarms:', error);
+    return [];
+  }
+}
 
 
 

@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>موبلایل موتور سکیل‌ها - سیستم مدیریت موتور سکیل ها</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="stylesheet" href="./global.css">
+</head>
+<body class="h-screen bg-gray-950 text-white">
+
+<div id="loading-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.65); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; color: white; font-size: 1rem;">
+  <div class="motorbike-loader">
+    <div class="bike">
+      <img class="small-img" src="https://i.ibb.co/kgFcnCHj/emojis-com-a-motor-bike-rideng-emoji.png" alt="loader-bike">
+    </div>
+    <div class="smoke smoke1">💨</div>
+    <div class="smoke smoke2">🌫️</div>
+  </div>
+  <p style="margin: 10px 0 0; font-weight: bold; text-shadow: 0 0 10px rgba(255,255,255,0.5);">
+    در حال بارگذاری...
+  </p>
+</div>
+
+<div class="h-screen p-6">
+  <div class="card p-6 mb-6">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <div class="motorcycle-icon">🛢️</div>
+        <div>
+          <h1 class="text-3xl font-bold text-white">موبلایل موتور سکیل‌ها</h1>
+          <p class="text-gray-300 mt-1">پارکینگ ولایت کابل</p>
+        </div>
+      </div>
+      <div class="text-left">
+        <p class="text-sm text-gray-300">تاریخ</p>
+        <p id="current-date" class="text-lg font-bold text-white"></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-6">
+    <div class="flex items-center justify-between mb-6">
+      <button class="btn btn-secondary" onclick="navigateTo('./maintenance.html')">← بازگشت به تعمیرات</button>
+      <button class="btn btn-primary" onclick="openOilReportModal()">➕ ثبت گزارش موبلایل</button>
+    </div>
+    
+    <!-- لیست موتور سکیل‌ها -->
+    <div id="motorcycle-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <!-- آیتم‌ها اینجا رندر می‌شوند -->
+    </div>
+  </div>
+</div>
+
+<!-- مودال ثبت گزارش موبلایل -->
+<div id="oil-report-modal" class="modal">
+  <div class="modal-content max-w-md">
+    <div class="flex items-center justify-between mb-6">
+      <h2 class="text-xl font-bold">🛢️ ثبت گزارش موبلایل</h2>
+      <button onclick="closeModal('oil-report-modal')" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+    </div>
+    
+    <form id="oil-report-form" onsubmit="submitOilReport(event)">
+      <div class="mb-4">
+        <label class="block text-sm font-medium mb-2">نام کامل</label>
+        <input type="text" id="oil-reporter-name" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2" readonly>
+      </div>
+      
+      <div class="mb-4">
+        <label class="block text-sm font-medium mb-2">دیپارتمنت</label>
+        <input type="text" id="oil-reporter-dept" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2" readonly>
+      </div>
+      
+      <div class="mb-4">
+        <label class="block text-sm font-medium mb-2">موتور سکیل را انتخاب کنید</label>
+        <div class="relative">
+          <button type="button" onclick="toggleMotorcycleDropdown()" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-right flex items-center justify-between">
+            <span id="selected-motorcycle-display">انتخاب کنید</span>
+            <span>▼</span>
+          </button>
+          <div id="motorcycle-dropdown" class="hidden fixed bg-gray-800 rounded-lg shadow-xl overflow-hidden z-50 max-h-60 overflow-y-auto min-w-[300px] border border-gray-600">
+            <div class="p-2 border-b border-gray-700">
+              <input type="text" id="motorcycle-search" placeholder="جستجو..." class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm" oninput="filterMotorcycles()">
+            </div>
+            <div id="motorcycle-options"></div>
+          </div>
+        </div>
+        <input type="hidden" id="selected-motorcycle-id">
+      </div>
+      
+      <div class="mb-4">
+        <label class="block text-sm font-medium mb-2">مقدار موبلایل (لیتر)</label>
+        <input type="number" step="0.1" id="oil-amount" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2" placeholder="مثال: 1.5" required>
+      </div>
+      
+      <div class="flex gap-3 mt-6">
+        <button type="submit" class="btn btn-primary flex-1">✅ ثبت</button>
+        <button type="button" onclick="closeModal('oil-report-modal')" class="btn btn-secondary flex-1">لغو</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- مودال نمایش گزارشات موتور سکیل -->
+<div id="motorcycle-reports-modal" class="modal">
+  <div class="modal-content max-w-2xl">
+    <div class="flex items-center justify-between mb-6">
+      <h2 id="reports-modal-title" class="text-xl font-bold">گزارشات موبلایل</h2>
+      <button onclick="closeModal('motorcycle-reports-modal')" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+    </div>
+    
+    <div id="motorcycle-reports-list" class="space-y-3 max-h-96 overflow-y-auto">
+      <!-- گزارشات اینجا رندر می‌شوند -->
+    </div>
+  </div>
+</div>
+
+<!-- Toast Notification -->
+<div id="toast" class="toast">
+  <span id="toast-icon" class="text-2xl">✅</span>
+  <span id="toast-message" class="font-medium text-gray-800">پیام موفقیت</span>
+</div>
+
+<script src="./googleSheets.js"></script>
+<script src="./index.js"></script>
+<script src="./maintenance.js"></script>
+<script src="./maintenance-oil.js"></script>
+
+</body>
+</html>
