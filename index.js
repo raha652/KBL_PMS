@@ -243,7 +243,7 @@ async function updateUser(userId, updatedData) {
   }
   return { isOk: true };
 }
-function openEditAccountModal(userId, username, fullName, password, role, position, department) {
+function openEditAccountModal(userId, username, fullName, password, role, position, department, customDisplays) {
   if (currentUserRole !== 'admin') {
     showToast('شما دسترسی به ویرایش اکانت ندارید', '⚠️');
     return;
@@ -254,7 +254,7 @@ function openEditAccountModal(userId, username, fullName, password, role, positi
   document.getElementById('edit-account-password').value = password;
   document.getElementById('edit-account-role').value = role;
   document.getElementById('edit-account-position').value = position;
-  document.getElementById('edit-account-department').value = department;پ
+  document.getElementById('edit-account-department').value = department;
 
   const displays = customDisplays ? customDisplays.split(',') : [];
   document.getElementById('edit-account-show-maintenance').checked = displays.includes('تعمیرات');
