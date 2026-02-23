@@ -1173,8 +1173,13 @@ function renderRequests(requests) {
   
   // Filter requests for limit users - they only see their own requests
   if (currentUserRole === 'limit' && window.currentUser) {
-    const currentUserFullName = window.currentUser.fullName;
-    filteredRequests = filteredRequests.filter(r => r.requesterFullName === currentUserFullName);
+    const currentUserFullName = (window.currentUser.fullName || '').trim().toLowerCase();
+    filteredRequests = filteredRequests.filter(r => {
+      const requesterName = (r.requesterFullName || '').trim().toLowerCase();
+      return requesterName === currentUserFullName;
+    });
+    console.log('Limit user filter - Current user:', currentUserFullName);
+    console.log('Filtered requests count:', filteredRequests.length);
   }
   if (currentRequestFilter !== 'all') {
     filteredRequests = filteredRequests.filter(r => r.status === currentRequestFilter);
