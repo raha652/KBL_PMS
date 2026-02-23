@@ -742,7 +742,7 @@ function renderAccounts() {
             <div>
               <h3 class="text-lg font-bold text-white">${user.fullName}</h3>
               <p class="text-gray-200 mt-1">نام کاربری: ${user.username}</p>
-              <p class="text-gray-200 mt-1">نقش: ${user.role === 'admin' ? 'ادمین' : 'کاربر'}</p>
+              <p class="text-gray-200 mt-1">نقش: ${user.role === 'admin' ? 'ادمین' : (user.role === 'limit' ? 'لیمیت' : 'کاربر')}</p>
               <p class="text-gray-200 mt-1">موقعیت شغلی: ${user.position || 'نامشخص'}</p>
               <p class="text-gray-200 mt-1">دیپارتمنت: ${user.department || 'نامشخص'}</p>
               ${customDisplaysHtml}
@@ -924,6 +924,29 @@ async function initApp() {
   currentUserRole = currentUser.role;
   session.fullName = currentUser.fullName;
   localStorage.setItem('session', JSON.stringify(session));
+
+  // Restrict access for limit users - they can only access requests.html
+  if (currentUserRole === 'limit') {
+    const currentPage = getCurrentPage();
+    if (currentPage !== 'requests') {
+      showToast('شما فقط به صفحه درخواست‌ها دسترسی دارید', '⚠️');
+      window.location.href = './requests.html';
+      hideLoading();
+      return;
+    }
+    // Hide back button for limit users on requests page
+    const backBtn = document.getElementById('back-to-main-btn');
+    if (backBtn) {
+      backBtn.classList.add('hidden');
+    }
+    // Hide department filter for limit users
+    const deptFilterSection = document.querySelector('.card.p-4.mb-6:has(#dept-filters)');
+    if (deptFilterSection) {
+      deptFilterSection.classList.add('hidden');
+    }
+    // Add logout button for limit users in header
+    addLogoutButtonForLimitUser();
+  }
 
   // Set user as online
   await setUserOnlineStatus(currentUser.username, 'online');
@@ -1147,6 +1170,12 @@ function renderRequests(requests) {
   const container = document.getElementById('requests-list');
   if (!container) return;
   let filteredRequests = requests.filter(r => r.status === 'pending' || r.status === 'active');
+  
+  // Filter requests for limit users - they only see their own requests
+  if (currentUserRole === 'limit' && window.currentUser) {
+    const currentUserFullName = window.currentUser.fullName;
+    filteredRequests = filteredRequests.filter(r => r.requesterFullName === currentUserFullName);
+  }
   if (currentRequestFilter !== 'all') {
     filteredRequests = filteredRequests.filter(r => r.status === currentRequestFilter);
   }
@@ -1656,12 +1685,20 @@ function filterByDepartment() {
   if (selectedDepartment === 'متفرقه') {
     availableEmployees = allData.filter(d => d.type === 'employee');
 
-    // فقط موتورهای آزاد از دیپارتمنت کاربر فعلی (برای حالت متفرقه)
-    availableMotorcycles = allData.filter(d =>
-      d.type === 'motorcycle' &&
-      d.motorcycleDepartment === userDept &&
-      !requestedMotorcycleIds.includes(d.__backendId)
-    );
+    // اگر دیپارتمنت همه است، تمام موتورهای آزاد را نشان بده
+    // در غیر این صورت فقط موتورهای دیپارتمنت کاربر فعلی
+    if (userDept === 'همه' || userDept === 'BDT') {
+      availableMotorcycles = allData.filter(d =>
+        d.type === 'motorcycle' &&
+        !requestedMotorcycleIds.includes(d.__backendId)
+      );
+    } else {
+      availableMotorcycles = allData.filter(d =>
+        d.type === 'motorcycle' &&
+        d.motorcycleDepartment === userDept &&
+        !requestedMotorcycleIds.includes(d.__backendId)
+      );
+    }
   } else {
     // دیپارتمنت معمولی
     availableEmployees = allData.filter(d =>
@@ -3593,6 +3630,74 @@ function markAllNotificationsAsRead(notificationIds) {
     }
   });
   localStorage.setItem('readNotifications', JSON.stringify(read));
+}
+
+// Add logout button for limit users in header (next to date)
+function addLogoutButtonForLimitUser() {
+  // Check if logout button already exists
+  if (document.getElementById('limit-logout-btn')) return;
+  
+  // Create logout button with open gate icon
+  const logoutBtn = document.createElement('button');
+  logoutBtn.id = 'limit-logout-btn';
+  logoutBtn.className = 'w-10 h-10 rounded-full bg-red-500 bg-opacity-80 flex items-center justify-center cursor-pointer hover:bg-opacity-100 transition-all duration-200 text-xl shrink-0';
+  logoutBtn.title = 'خروج از سیستم';
+  logoutBtn.innerHTML = '🚪';
+  logoutBtn.onclick = showLogoutConfirmModal;
+  
+  // Find the current-date element
+  const currentDate = document.getElementById('current-date');
+  if (currentDate && currentDate.parentElement) {
+    // The date container has class "text-left" - we need to make it a flex container
+    const dateContainer = currentDate.parentElement;
+    // Change from text-left to flex layout
+    dateContainer.style.display = 'flex';
+    dateContainer.style.flexDirection = 'row';
+    dateContainer.style.alignItems = 'center';
+    dateContainer.style.justifyContent = 'flex-start';
+    dateContainer.style.gap = '8px';
+    
+    // In RTL, first element appears on the right side
+    // Append the button to the end so it appears first (on the right) in RTL
+    dateContainer.appendChild(logoutBtn);
+  }
+}
+
+// Show logout confirmation modal for limit users
+function showLogoutConfirmModal() {
+  // Create modal if it doesn't exist
+  let modal = document.getElementById('limit-logout-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'limit-logout-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-content">
+        <h2 class="text-2xl font-bold text-gray-300 mb-6">🚪 خروج از سیستم</h2>
+        <div class="mb-4 p-4 bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-lg">
+          <p class="text-red-800">آیا می‌خواهید از سیستم خارج شوید؟</p>
+        </div>
+        <div class="flex gap-3 mt-6">
+          <button type="button" class="btn btn-danger flex-1" onclick="confirmLimitLogout()">✅ بله، خروج</button>
+          <button type="button" class="btn btn-secondary flex-1" onclick="closeLimitLogoutModal()">❌ انصراف</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+  modal.classList.add('active');
+}
+
+function closeLimitLogoutModal() {
+  const modal = document.getElementById('limit-logout-modal');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+}
+
+function confirmLimitLogout() {
+  closeLimitLogoutModal();
+  logout();
 }
 
 // Load notification badge count (only unread)
