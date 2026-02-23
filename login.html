@@ -153,7 +153,12 @@ allUsers = stored && stored !== 'undefined' ? JSON.parse(stored) : [];
           role: user.role
         }));
         showToast('لاگین موفق! در حال انتقال...', '✅');
-        window.location.href = './index.html';
+        // Redirect limit users to requests.html
+        if (user.role === 'limit') {
+          window.location.href = './requests.html';
+        } else {
+          window.location.href = './index.html';
+        }
       } else {
         document.getElementById('login-error').classList.remove('hidden');
         document.getElementById('password').value = '';
