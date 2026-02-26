@@ -1175,8 +1175,8 @@ function renderRequests(requests) {
   if (currentUserRole === 'limit' && window.currentUser) {
     const currentUserFullName = (window.currentUser.fullName || '').trim().toLowerCase();
     filteredRequests = filteredRequests.filter(r => {
-      const requesterName = (r.requesterFullName || '').trim().toLowerCase();
-      return requesterName === currentUserFullName;
+      const employeeName = (r.employeeName || '').trim().toLowerCase();
+      return employeeName === currentUserFullName;
     });
     console.log('Limit user filter - Current user:', currentUserFullName);
     console.log('Filtered requests count:', filteredRequests.length);
